@@ -501,6 +501,7 @@ local function drawAnims()
             end
         end
     else
+        -- Draw the office view
         for _, a in ipairs(anims) do
             if a.room == "Hallway" or a.room == "Office" then
                 local sprite = nil
@@ -526,6 +527,25 @@ local function drawAnims()
                     love.graphics.circle("fill", a.x, a.y, 25)
                 end
             end
+        end
+
+        -- Doors overlay the office (left and right)
+        if office.doorLeftClosed and img.doorLeft then
+            local scale = game.height / img.doorLeft:getHeight()
+            love.graphics.setColor(1, 1, 1)
+            love.graphics.draw(img.doorLeft, 0, 0, 0, scale, scale)
+        end
+        if office.doorRightClosed and img.doorRight then
+            local scale = game.height / img.doorRight:getHeight()
+            local dw = img.doorRight:getWidth() * scale
+            love.graphics.setColor(1, 1, 1)
+            love.graphics.draw(img.doorRight, game.width - dw, 0, 0, scale, scale)
+        end
+
+        -- Light toggle overlays a dim filter when off
+        if not office.lightOn then
+            love.graphics.setColor(0, 0, 0, 0.6)
+            love.graphics.rectangle("fill", 0, 0, game.width, game.height)
         end
     end
 end

@@ -506,6 +506,19 @@ local function drawBackground()
     end
 end
 
+local function getAnimSprite(name)
+    if name == "Mr Ingles" then
+        return img.anim_mr_ingles
+    elseif name == "Janitor Bot" then
+        return img.anim_janitor
+    elseif name == "Librarian" then
+        return img.anim_librarian
+    elseif name == "Vent Crawler" then
+        return img.anim_vent
+    end
+    return nil
+end
+
 local function drawAnims()
     if office.camsOpen then
         local camName = cameras.list[cameras.currentIndex]
@@ -526,9 +539,29 @@ local function drawAnims()
         love.graphics.print("CAM: "..camName, 20, 20)
 
         for _, a in ipairs(anims) do
-            if a.room ~= "Office" then
-                love.graphics.setColor(1, 0, 0)
-                love.graphics.circle("fill", a.x, a.y, 20)
+            if a.room == camName then
+                local sprite = getAnimSprite(a.name)
+                if sprite then
+                    love.graphics.setColor(1, 1, 1)
+                    local iw, ih = sprite:getWidth(), sprite:getHeight()
+                    local baseScale = 0.42
+                    local wobble = math.sin(love.timer.getTime() * 2 + a.x * 0.01) * 0.02
+                    local sx = baseScale * (game.width / 1280)
+                    local sy = baseScale * (game.height / 720)
+                    love.graphics.draw(
+                        sprite,
+                        a.x,
+                        a.y + wobble * 30,
+                        wobble,
+                        sx * (1 + wobble),
+                        sy * (1 + wobble),
+                        iw / 2,
+                        ih / 2
+                    )
+                else
+                    love.graphics.setColor(0.7, 1, 1)
+                    love.graphics.circle("fill", a.x, a.y, 20)
+                end
             end
         end
 
@@ -554,16 +587,7 @@ local function drawAnims()
         -- Draw the office view
         for _, a in ipairs(anims) do
             if a.room == "Hallway" or a.room == "Office" then
-                local sprite = nil
-                if a.name == "Mr Ingles" then
-                    sprite = img.anim_mr_ingles
-                elseif a.name == "Janitor Bot" then
-                    sprite = img.anim_janitor
-                elseif a.name == "Librarian" then
-                    sprite = img.anim_librarian
-                elseif a.name == "Vent Crawler" then
-                    sprite = img.anim_vent
-                end
+                local sprite = getAnimSprite(a.name)
 
                 if sprite then
                     love.graphics.setColor(1, 1, 1)

@@ -147,6 +147,7 @@ local function loadAssets()
     img.anim_janitor   = safeImage("assets/img/anim_janitor.png")
     img.anim_librarian = safeImage("assets/img/anim_librarian.png")
     img.anim_vent      = safeImage("assets/img/anim_vent.png")
+    img.mr_ingles_office = safeImage("assets/img/mr_ingles_office.png")
 
     -- SFX
     sfx.doorClose   = safeSound("assets/sfx/door_close.ogg", "static")
@@ -487,6 +488,7 @@ function love.update(dt)
         -- nothing special
     end
 
+
     updateOfficeEffects(dt)
 end
 
@@ -504,32 +506,65 @@ local function drawBackground()
     end
 end
 
-local function drawAnims()
-    if office.camsOpen then
-        local camName = cameras.list[cameras.currentIndex]
-        local camKey = "cam_"..string.lower(camName)
-        local camImg = img[camKey]
-        if camImg then
-            love.graphics.setColor(1, 1, 1)
-            love.graphics.draw(camImg, 0, 0, 0,
-                game.width / camImg:getWidth(),
-                game.height / camImg:getHeight())
-        else
-            love.graphics.setColor(0, 0, 0.1)
-            love.graphics.rectangle("fill", 0, 0, game.width, game.height)
-        end
+local animSprites = {
+    ["Mr Ingles"]   = function() return img.anim_mr_ingles or img.mr_ingles_office end,
+    ["Janitor Bot"] = function() return img.anim_janitor end,
+    ["Librarian"]   = function() return img.anim_librarian end,
+    ["Vent Crawler"] = function() return img.anim_vent end,
+}
 
-        love.graphics.setFont(fontMedium)
-        love.graphics.setColor(0, 1, 1)
-        love.graphics.print("CAM: "..camName, 20, 20)
+local function getAnimSprite(name)
+    local getter = animSprites[name]
+    if getter then
+        return getter()
+    end
+    return img.mr_ingles_office
+end
 
-        for _, a in ipairs(anims) do
-            if a.room ~= "Office" then
-                love.graphics.setColor(1, 0, 0)
+local function drawCameraFeed()
+    local camName = cameras.list[cameras.currentIndex]
+    local camKey = "cam_" .. string.lower(camName)
+    local camImg = img[camKey]
+
+    if camImg then
+        love.graphics.setColor(1, 1, 1)
+        love.graphics.draw(camImg, 0, 0, 0,
+            game.width / camImg:getWidth(),
+            game.height / camImg:getHeight())
+    else
+        love.graphics.setColor(0, 0, 0.1)
+        love.graphics.rectangle("fill", 0, 0, game.width, game.height)
+    end
+
+    love.graphics.setFont(fontMedium)
+    love.graphics.setColor(0, 1, 1)
+    love.graphics.print("CAM: " .. camName, 20, 20)
+
+    for _, a in ipairs(anims) do
+        if a.room == camName then
+            local sprite = getAnimSprite(a.name)
+            if sprite then
+                love.graphics.setColor(1, 1, 1)
+                local iw, ih = sprite:getWidth(), sprite:getHeight()
+                local baseScale = 0.42
+                local wobble = math.sin(love.timer.getTime() * 2 + a.x * 0.01) * 0.02
+                local sx = baseScale * (game.width / 1280)
+                local sy = baseScale * (game.height / 720)
+                love.graphics.draw(
+                    sprite,
+                    a.x,
+                    a.y + wobble * 30,
+                    wobble,
+                    sx * (1 + wobble),
+                    sy * (1 + wobble),
+                    iw / 2,
+                    ih / 2
+                )
+            else
+                love.graphics.setColor(0.7, 1, 1)
                 love.graphics.circle("fill", a.x, a.y, 20)
             end
         end
-
         -- Subtle scanlines to make cameras feel like a feed
         love.graphics.setColor(0, 1, 1, 0.08)
         for y = 0, game.height, 8 do
@@ -605,6 +640,41 @@ local function drawAnims()
             love.graphics.setColor(0, 0, 0, alpha)
             love.graphics.rectangle("line", 10 * i, 10 * i, game.width - 20 * i, game.height - 20 * i)
         end
+    end
+
+    -- Doors overlay the office (left and right)
+    if (office.doorLeftClosed or office.doorLeftProgress > 0.01) and img.doorLeft then
+        local scale = game.height / img.doorLeft:getHeight()
+        love.graphics.setColor(1, 1, 1)
+        local slide = 1 - office.doorLeftProgress
+        love.graphics.draw(img.doorLeft, -img.doorLeft:getWidth() * scale * slide, 0, 0, scale, scale)
+    end
+
+    if (office.doorRightClosed or office.doorRightProgress > 0.01) and img.doorRight then
+        local scale = game.height / img.doorRight:getHeight()
+        local dw = img.doorRight:getWidth() * scale
+        love.graphics.setColor(1, 1, 1)
+        local slide = 1 - office.doorRightProgress
+        love.graphics.draw(img.doorRight, game.width - dw + dw * slide, 0, 0, scale, scale)
+    end
+
+    -- Light toggle overlays a dim filter when off
+    love.graphics.setColor(0, 0, 0, office.lightDim)
+    love.graphics.rectangle("fill", 0, 0, game.width, game.height)
+
+    -- Add a soft vignette to make the office feel moodier
+    for i = 1, 6 do
+        local alpha = 0.05 * i
+        love.graphics.setColor(0, 0, 0, alpha)
+        love.graphics.rectangle("line", 10 * i, 10 * i, game.width - 20 * i, game.height - 20 * i)
+    end
+end
+
+local function drawAnims()
+    if office.camsOpen then
+        drawCameraFeed()
+    else
+        drawOfficeView()
     end
 end
 

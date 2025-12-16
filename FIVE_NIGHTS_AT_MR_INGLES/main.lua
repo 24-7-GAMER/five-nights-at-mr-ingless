@@ -723,6 +723,42 @@ end
 -------------------------------------------------------
 -- INPUT
 -------------------------------------------------------
+local function toggleDoor(side)
+    if power.outage then return end
+    if side == "left" then
+        office.doorLeftClosed = not office.doorLeftClosed
+        playSfx(office.doorLeftClosed and sfx.doorClose or sfx.doorOpen)
+    elseif side == "right" then
+        office.doorRightClosed = not office.doorRightClosed
+        playSfx(office.doorRightClosed and sfx.doorClose or sfx.doorOpen)
+    end
+end
+
+local function toggleFlashlight()
+    if power.outage then return end
+    office.lightOn = not office.lightOn
+    playSfx(sfx.lightToggle)
+end
+
+local function toggleCameras()
+    if power.outage then return end
+    office.camsOpen = not office.camsOpen
+    if office.camsOpen then
+        office.camFlash = 1
+        playStaticLoop()
+    else
+        stopStaticLoop()
+    end
+end
+
+local function switchCamera(index)
+    if index < 1 or index > #cameras.list then return end
+    cameras.currentIndex = index
+    if office.camsOpen then
+        office.camFlash = 1
+    end
+end
+
 function love.keypressed(key)
     if key == "escape" then
         love.event.quit()
@@ -746,48 +782,25 @@ function love.keypressed(key)
 
     if game.state == "playing" then
         if key == "q" then
-            if not power.outage then
-                office.doorLeftClosed = not office.doorLeftClosed
-                playSfx(office.doorLeftClosed and sfx.doorClose or sfx.doorOpen)
-            end
+            toggleDoor("left")
         elseif key == "e" then
-            if not power.outage then
-                office.doorRightClosed = not office.doorRightClosed
-                playSfx(office.doorRightClosed and sfx.doorClose or sfx.doorOpen)
-            end
+            toggleDoor("right")
         elseif key == "f" then
-            if not power.outage then
-                office.lightOn = not office.lightOn
-                playSfx(sfx.lightToggle)
-            end
+            toggleFlashlight()
         elseif key == "tab" then
-            if not power.outage then
-                office.camsOpen = not office.camsOpen
-                if office.camsOpen then
-                    office.camFlash = 1
-                    playStaticLoop()
-                else
-                    stopStaticLoop()
-                end
-            end
+            toggleCameras()
         elseif key == "1" then
-            cameras.currentIndex = 1
-            if office.camsOpen then office.camFlash = 1 end
+            switchCamera(1)
         elseif key == "2" then
-            cameras.currentIndex = 2
-            if office.camsOpen then office.camFlash = 1 end
+            switchCamera(2)
         elseif key == "3" then
-            cameras.currentIndex = 3
-            if office.camsOpen then office.camFlash = 1 end
+            switchCamera(3)
         elseif key == "4" then
-            cameras.currentIndex = 4
-            if office.camsOpen then office.camFlash = 1 end
+            switchCamera(4)
         elseif key == "5" then
-            cameras.currentIndex = 5
-            if office.camsOpen then office.camFlash = 1 end
+            switchCamera(5)
         elseif key == "6" then
-            cameras.currentIndex = 6
-            if office.camsOpen then office.camFlash = 1 end
+            switchCamera(6)
         end
     elseif game.state == "jumpscare" then
         if key == "r" then

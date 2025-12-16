@@ -603,7 +603,7 @@ local function drawAnims()
         for i = 1, 6 do
             local alpha = 0.05 * i
             love.graphics.setColor(0, 0, 0, alpha)
-            love.graphics.rectangle("line", 10 * i, 10 * i, game.width - 20 * i, game.height - 20 * i 
+            love.graphics.rectangle("line", 10 * i, 10 * i, game.width - 20 * i, game.height - 20 * i)
         end
     end
 end

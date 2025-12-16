@@ -487,7 +487,9 @@ function love.update(dt)
         -- nothing special
     end
 
-    updateOfficeEffects(dt)
+    if game.state == "playing" then
+        updateOfficeEffects(dt)
+    end
 end
 
 -------------------------------------------------------

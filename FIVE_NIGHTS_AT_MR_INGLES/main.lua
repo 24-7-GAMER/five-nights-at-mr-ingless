@@ -30,6 +30,10 @@ local office = {
     doorRightClosed = false,
     lightOn = true,
     camsOpen = false,
+    doorLeftProgress = 0.0,   -- 0 = open, 1 = closed (animated)
+    doorRightProgress = 0.0,
+    lightDim = 0.0,           -- animated darkness overlay
+    camFlash = 0.0,           -- quick static flash when switching cams
 }
 
 local cameras = {
@@ -143,6 +147,7 @@ local function loadAssets()
     img.anim_janitor   = safeImage("assets/img/anim_janitor.png")
     img.anim_librarian = safeImage("assets/img/anim_librarian.png")
     img.anim_vent      = safeImage("assets/img/anim_vent.png")
+    img.mr_ingles_office = safeImage("assets/img/mr_ingles_office.png")
 
     -- SFX
     sfx.doorClose   = safeSound("assets/sfx/door_close.ogg", "static")
@@ -273,6 +278,25 @@ end
 
 local function setupAnimatronics()
     resetAnimatronics()
+end
+
+local function updateOfficeEffects(dt)
+    -- Smoothly animate door movement to avoid popping
+    local doorSpeed = 5 * dt
+    local leftTarget = office.doorLeftClosed and 1 or 0
+    local rightTarget = office.doorRightClosed and 1 or 0
+    office.doorLeftProgress = office.doorLeftProgress + (leftTarget - office.doorLeftProgress) * doorSpeed
+    office.doorRightProgress = office.doorRightProgress + (rightTarget - office.doorRightProgress) * doorSpeed
+
+    -- Smooth light dimming for flashlight toggle
+    local dimTarget = office.lightOn and 0 or 0.6
+    local dimSpeed = 3 * dt
+    office.lightDim = office.lightDim + (dimTarget - office.lightDim) * dimSpeed
+
+    -- Fade out the camera static flash
+    if office.camFlash > 0 then
+        office.camFlash = math.max(0, office.camFlash - dt * 2.8)
+    end
 end
 
 local function moveAnim(a)
@@ -414,6 +438,10 @@ local function startNight(n)
     office.doorRightClosed = false
     office.lightOn = true
     office.camsOpen = false
+    office.doorLeftProgress = 0
+    office.doorRightProgress = 0
+    office.lightDim = 0
+    office.camFlash = 0
     stopStaticLoop()
     playAmbienceForNight(game.night)
 end
@@ -459,6 +487,10 @@ function love.update(dt)
     elseif game.state == "win" then
         -- nothing special
     end
+
+    if game.state == "playing" then
+        updateOfficeEffects(dt)
+    end
 end
 
 -------------------------------------------------------
@@ -475,58 +507,149 @@ local function drawBackground()
     end
 end
 
-local function drawAnims()
-    if office.camsOpen then
-        local camName = cameras.list[cameras.currentIndex]
-        local camKey = "cam_"..string.lower(camName)
-        local camImg = img[camKey]
-        if camImg then
-            love.graphics.setColor(1, 1, 1)
-            love.graphics.draw(camImg, 0, 0, 0,
-                game.width / camImg:getWidth(),
-                game.height / camImg:getHeight())
-        else
-            love.graphics.setColor(0, 0, 0.1)
-            love.graphics.rectangle("fill", 0, 0, game.width, game.height)
-        end
+local animSprites = {
+    ["Mr Ingles"]   = function() return img.anim_mr_ingles or img.mr_ingles_office end,
+    ["Janitor Bot"] = function() return img.anim_janitor end,
+    ["Librarian"]   = function() return img.anim_librarian end,
+    ["Vent Crawler"] = function() return img.anim_vent end,
+}
 
-        love.graphics.setFont(fontMedium)
-        love.graphics.setColor(0, 1, 1)
-        love.graphics.print("CAM: "..camName, 20, 20)
+local function getAnimSprite(name)
+    local getter = animSprites[name]
+    if getter then
+        return getter()
+    end
+    return img.mr_ingles_office
+end
 
-        for _, a in ipairs(anims) do
-            if a.room ~= "Office" then
-                love.graphics.setColor(1, 0, 0)
+local function drawCameraFeed()
+    local camName = cameras.list[cameras.currentIndex]
+    local camKey = "cam_" .. string.lower(camName)
+    local camImg = img[camKey]
+
+    if camImg then
+        love.graphics.setColor(1, 1, 1)
+        love.graphics.draw(camImg, 0, 0, 0,
+            game.width / camImg:getWidth(),
+            game.height / camImg:getHeight())
+    else
+        love.graphics.setColor(0, 0, 0.1)
+        love.graphics.rectangle("fill", 0, 0, game.width, game.height)
+    end
+
+    love.graphics.setFont(fontMedium)
+    love.graphics.setColor(0, 1, 1)
+    love.graphics.print("CAM: " .. camName, 20, 20)
+
+    for _, a in ipairs(anims) do
+        if a.room == camName then
+            local sprite = getAnimSprite(a.name)
+            if sprite then
+                love.graphics.setColor(1, 1, 1)
+                local iw, ih = sprite:getWidth(), sprite:getHeight()
+                local baseScale = 0.42
+                local wobble = math.sin(love.timer.getTime() * 2 + a.x * 0.01) * 0.02
+                local sx = baseScale * (game.width / 1280)
+                local sy = baseScale * (game.height / 720)
+                love.graphics.draw(
+                    sprite,
+                    a.x,
+                    a.y + wobble * 30,
+                    wobble,
+                    sx * (1 + wobble),
+                    sy * (1 + wobble),
+                    iw / 2,
+                    ih / 2
+                )
+            else
+                love.graphics.setColor(0.7, 1, 1)
                 love.graphics.circle("fill", a.x, a.y, 20)
             end
         end
-    else
-        for _, a in ipairs(anims) do
-            if a.room == "Hallway" or a.room == "Office" then
-                local sprite = nil
-                if a.name == "Mr Ingles" then
-                    sprite = img.anim_mr_ingles
-                elseif a.name == "Janitor Bot" then
-                    sprite = img.anim_janitor
-                elseif a.name == "Librarian" then
-                    sprite = img.anim_librarian
-                elseif a.name == "Vent Crawler" then
-                    sprite = img.anim_vent
-                end
-                if sprite then
-                    love.graphics.setColor(1, 1, 1)
-                    local iw, ih = sprite:getWidth(), sprite:getHeight()
-                    local scale = 0.4
-                    local sx = scale * (game.width / 1280)
-                    local sy = scale * (game.height / 720)
-                    love.graphics.draw(sprite, a.x, a.y, 0, sx, sy,
-                        iw/2, ih/2)
-                else
-                    love.graphics.setColor(1, 0, 0)
-                    love.graphics.circle("fill", a.x, a.y, 25)
-                end
+    end
+
+    -- Subtle scanlines to make cameras feel like a feed
+    love.graphics.setColor(0, 1, 1, 0.08)
+    for y = 0, game.height, 8 do
+        love.graphics.line(0, y, game.width, y)
+    end
+
+    -- Add a brief static flash when switching cameras to make the feed feel active
+    if office.camFlash > 0 then
+        love.graphics.setColor(1, 1, 1, 0.8 * office.camFlash)
+        love.graphics.rectangle("fill", 0, 0, game.width, game.height)
+        love.graphics.setColor(0, 0, 0.2, 0.4 * office.camFlash)
+        for i = 1, 30 do
+            local x = love.math.random() * game.width
+            local y = love.math.random() * game.height
+            local w = love.math.random(4, 14)
+            love.graphics.rectangle("fill", x, y, w, 2)
+        end
+    end
+end
+
+local function drawOfficeView()
+    for _, a in ipairs(anims) do
+        if a.room == "Hallway" or a.room == "Office" then
+            local sprite = getAnimSprite(a.name)
+
+            if sprite then
+                love.graphics.setColor(1, 1, 1)
+                local iw, ih = sprite:getWidth(), sprite:getHeight()
+                local scale = 0.4
+                local wobble = math.sin(love.timer.getTime() * 2 + a.x * 0.01) * 0.02
+                local sx = scale * (game.width / 1280)
+                local sy = scale * (game.height / 720)
+                love.graphics.draw(
+                    sprite,
+                    a.x,
+                    a.y + wobble * 40,
+                    wobble,
+                    sx * (1 + wobble),
+                    sy * (1 + wobble),
+                    iw / 2,
+                    ih / 2
+                )
+            else
+                love.graphics.setColor(1, 0, 0)
+                love.graphics.circle("fill", a.x, a.y, 25)
             end
         end
+    end
+
+    -- Doors overlay the office (left and right)
+    if (office.doorLeftClosed or office.doorLeftProgress > 0.01) and img.doorLeft then
+        local scale = game.height / img.doorLeft:getHeight()
+        love.graphics.setColor(1, 1, 1)
+        local slide = 1 - office.doorLeftProgress
+        love.graphics.draw(img.doorLeft, -img.doorLeft:getWidth() * scale * slide, 0, 0, scale, scale)
+    end
+
+    if (office.doorRightClosed or office.doorRightProgress > 0.01) and img.doorRight then
+        local scale = game.height / img.doorRight:getHeight()
+        local dw = img.doorRight:getWidth() * scale
+        love.graphics.setColor(1, 1, 1)
+        local slide = 1 - office.doorRightProgress
+        love.graphics.draw(img.doorRight, game.width - dw + dw * slide, 0, 0, scale, scale)
+    end
+
+    -- Light toggle overlays a dim filter when off
+    love.graphics.setColor(0, 0, 0, office.lightDim)
+    love.graphics.rectangle("fill", 0, 0, game.width, game.height)
+
+    -- Add a soft vignette to make the office feel moodier
+    for i = 1, 6 do
+        local alpha = 0.05 * i
+        love.graphics.setColor(0, 0, 0, alpha)
+        love.graphics.rectangle("line", 10 * i, 10 * i, game.width - 20 * i, game.height - 20 * i)
+    end
+end
+
+local function drawAnims()
+    if office.camsOpen then
+        drawCameraFeed()
+    else
+        drawOfficeView()
     end
 end
 
@@ -646,6 +769,42 @@ end
 -------------------------------------------------------
 -- INPUT
 -------------------------------------------------------
+local function toggleDoor(side)
+    if power.outage then return end
+    if side == "left" then
+        office.doorLeftClosed = not office.doorLeftClosed
+        playSfx(office.doorLeftClosed and sfx.doorClose or sfx.doorOpen)
+    elseif side == "right" then
+        office.doorRightClosed = not office.doorRightClosed
+        playSfx(office.doorRightClosed and sfx.doorClose or sfx.doorOpen)
+    end
+end
+
+local function toggleFlashlight()
+    if power.outage then return end
+    office.lightOn = not office.lightOn
+    playSfx(sfx.lightToggle)
+end
+
+local function toggleCameras()
+    if power.outage then return end
+    office.camsOpen = not office.camsOpen
+    if office.camsOpen then
+        office.camFlash = 1
+        playStaticLoop()
+    else
+        stopStaticLoop()
+    end
+end
+
+local function switchCamera(index)
+    if index < 1 or index > #cameras.list then return end
+    cameras.currentIndex = index
+    if office.camsOpen then
+        office.camFlash = 1
+    end
+end
+
 function love.keypressed(key)
     if key == "escape" then
         love.event.quit()
@@ -669,41 +828,25 @@ function love.keypressed(key)
 
     if game.state == "playing" then
         if key == "q" then
-            if not power.outage then
-                office.doorLeftClosed = not office.doorLeftClosed
-                playSfx(office.doorLeftClosed and sfx.doorClose or sfx.doorOpen)
-            end
+            toggleDoor("left")
         elseif key == "e" then
-            if not power.outage then
-                office.doorRightClosed = not office.doorRightClosed
-                playSfx(office.doorRightClosed and sfx.doorClose or sfx.doorOpen)
-            end
+            toggleDoor("right")
         elseif key == "f" then
-            if not power.outage then
-                office.lightOn = not office.lightOn
-                playSfx(sfx.lightToggle)
-            end
+            toggleFlashlight()
         elseif key == "tab" then
-            if not power.outage then
-                office.camsOpen = not office.camsOpen
-                if office.camsOpen then
-                    playStaticLoop()
-                else
-                    stopStaticLoop()
-                end
-            end
+            toggleCameras()
         elseif key == "1" then
-            cameras.currentIndex = 1
+            switchCamera(1)
         elseif key == "2" then
-            cameras.currentIndex = 2
+            switchCamera(2)
         elseif key == "3" then
-            cameras.currentIndex = 3
+            switchCamera(3)
         elseif key == "4" then
-            cameras.currentIndex = 4
+            switchCamera(4)
         elseif key == "5" then
-            cameras.currentIndex = 5
+            switchCamera(5)
         elseif key == "6" then
-            cameras.currentIndex = 6
+            switchCamera(6)
         end
     elseif game.state == "jumpscare" then
         if key == "r" then

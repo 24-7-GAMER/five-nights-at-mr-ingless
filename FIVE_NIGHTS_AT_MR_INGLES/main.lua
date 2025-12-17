@@ -809,6 +809,70 @@ local function drawAnims()
     end
 end
 
+local function drawOfficeAnim(a, now)
+    if a.room ~= "Hallway" and a.room ~= "Office" then
+        return
+    end
+
+    local sprite = getAnimSprite(a.name)
+    local wobble = math.sin(now * 2 + a.x * 0.01) * 0.02
+
+    if sprite then
+        love.graphics.setColor(1, 1, 1)
+        local scale = 0.4
+        local sx = scale * (game.width / 1280) * (1 + wobble)
+        local sy = scale * (game.height / 720) * (1 + wobble)
+        local iw, ih = sprite:getWidth(), sprite:getHeight()
+        love.graphics.draw(sprite, a.x, a.y + wobble * 40, wobble, sx, sy, iw / 2, ih / 2)
+        return
+    end
+
+    love.graphics.setColor(1, 0, 0)
+    love.graphics.circle("fill", a.x, a.y, 25)
+end
+
+local function drawOfficeView()
+    local now = love.timer.getTime()
+    for _, a in ipairs(anims) do
+        drawOfficeAnim(a, now)
+    end
+
+    -- Doors overlay the office (left and right)
+    if (office.doorLeftClosed or office.doorLeftProgress > 0.01) and img.doorLeft then
+        local scale = game.height / img.doorLeft:getHeight()
+        love.graphics.setColor(1, 1, 1)
+        local slide = 1 - office.doorLeftProgress
+        love.graphics.draw(img.doorLeft, -img.doorLeft:getWidth() * scale * slide, 0, 0, scale, scale)
+    end
+
+    if (office.doorRightClosed or office.doorRightProgress > 0.01) and img.doorRight then
+        local scale = game.height / img.doorRight:getHeight()
+        local dw = img.doorRight:getWidth() * scale
+        love.graphics.setColor(1, 1, 1)
+        local slide = 1 - office.doorRightProgress
+        love.graphics.draw(img.doorRight, game.width - dw + dw * slide, 0, 0, scale, scale)
+    end
+
+    -- Light toggle overlays a dim filter when off
+    love.graphics.setColor(0, 0, 0, office.lightDim)
+    love.graphics.rectangle("fill", 0, 0, game.width, game.height)
+
+    -- Add a soft vignette to make the office feel moodier
+    for i = 1, 6 do
+        local alpha = 0.05 * i
+        love.graphics.setColor(0, 0, 0, alpha)
+        love.graphics.rectangle("line", 10 * i, 10 * i, game.width - 20 * i, game.height - 20 * i)
+    end
+end
+
+local function drawAnims()
+    if office.camsOpen then
+        drawCameraFeed()
+    else
+        drawOfficeView()
+    end
+end
+
 local function drawHUD()
     love.graphics.setFont(fontSmall)
     local p = math.floor(power.current + 0.5)

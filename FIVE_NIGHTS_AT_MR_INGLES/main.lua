@@ -14,7 +14,7 @@ local game = {
     height = 720,
     status = "",
 }
-
+local baseScale = 1
 local power = {
     max = 100,
     current = 100,

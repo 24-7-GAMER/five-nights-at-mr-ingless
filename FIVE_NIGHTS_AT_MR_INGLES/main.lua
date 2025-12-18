@@ -18,10 +18,10 @@ local game = {
 local power = {
     max = 100,
     current = 100,
-    baseDrain = 0.20,
-    doorDrain = 0.18,
-    lightDrain = 0.20,
-    camDrain = 0.15,
+    baseDrain = 0.35,
+    doorDrain = 0.50,
+    lightDrain = 0.50,
+    camDrain = 0.60,
     outage = false,
 }
 
@@ -586,7 +586,7 @@ local function drawCameraFeed()
                 love.graphics.circle("fill", a.x, a.y, 20)
             end
         end
-
+    end
 
 
         -- Subtle scanlines to make cameras feel like a feed

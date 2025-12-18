@@ -696,6 +696,12 @@ local function drawCameraFeed()
     end
 end
 
+function drawOfficeView()
+    local now = love.timer.getTime()
+    for _, a in ipairs(anims) do
+        drawOfficeAnim(a, now)
+    end
+    
 local function drawAnims()
     if office.camsOpen then
         drawCameraFeed()
@@ -835,11 +841,7 @@ local function drawOfficeAnim(a, now)
     love.graphics.circle("fill", a.x, a.y, 25)
 end
 
-function drawOfficeView()
-    local now = love.timer.getTime()
-    for _, a in ipairs(anims) do
-        drawOfficeAnim(a, now)
-    end
+
 
     -- Doors overlay the office (left and right)
     if (office.doorLeftClosed or office.doorLeftProgress > 0.01) and img.doorLeft then

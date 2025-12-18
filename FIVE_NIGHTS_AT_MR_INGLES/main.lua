@@ -606,7 +606,6 @@ local function drawCameraFeed()
                 local w = love.math.random(4, 14)
                 love.graphics.rectangle("fill", x, y, w, 2)
             end
-        end
     else
         -- Draw the office view
         for _, a in ipairs(anims) do

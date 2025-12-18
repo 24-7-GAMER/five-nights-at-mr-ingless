@@ -771,6 +771,7 @@ end
 local function drawAnims()
     if office.camsOpen then
         drawCameraFeed()
+        return
     else
         drawOfficeView()
     end
@@ -806,6 +807,7 @@ end
 local function drawAnims()
     if office.camsOpen then
         drawCameraFeed()
+        return   
     else
         drawOfficeView()
     end

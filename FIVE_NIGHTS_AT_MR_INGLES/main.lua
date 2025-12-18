@@ -701,8 +701,8 @@ function drawOfficeView()
     for _, a in ipairs(anims) do
         drawOfficeAnim(a, now)
     end
-    
-local function drawAnims()
+
+function drawAnims()
     if office.camsOpen then
         drawCameraFeed()
         return

@@ -835,7 +835,7 @@ local function drawOfficeAnim(a, now)
     love.graphics.circle("fill", a.x, a.y, 25)
 end
 
-local function drawOfficeView()
+function drawOfficeView()
     local now = love.timer.getTime()
     for _, a in ipairs(anims) do
         drawOfficeAnim(a, now)

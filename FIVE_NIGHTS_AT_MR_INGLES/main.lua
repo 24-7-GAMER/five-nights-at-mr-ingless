@@ -730,9 +730,9 @@ local function drawAnims()
         love.graphics.setColor(0, 0, 0, alpha)
         love.graphics.rectangle("line", 10 * i, 10 * i, game.width - 20 * i, game.height - 20 * i)
     end
-end
 
-local function drawAnims()
+
+
     if office.camsOpen then
         drawCameraFeed()
         return    
@@ -766,9 +766,9 @@ local function drawAnims()
         love.graphics.setColor(0, 0, 0, alpha)
         love.graphics.rectangle("line", 10 * i, 10 * i, game.width - 20 * i, game.height - 20 * i)
     end
-end
 
-local function drawAnims()
+
+
     if office.camsOpen then
         drawCameraFeed()
         return
@@ -802,16 +802,16 @@ local function drawAnims()
         love.graphics.setColor(0, 0, 0, alpha)
         love.graphics.rectangle("line", 10 * i, 10 * i, game.width - 20 * i, game.height - 20 * i)
     end
-end
 
-local function drawAnims()
+
+
     if office.camsOpen then
         drawCameraFeed()
         return   
     else
         drawOfficeView()
     end
-end
+
 
 local function drawOfficeAnim(a, now)
     if a.room ~= "Hallway" and a.room ~= "Office" then
@@ -869,7 +869,7 @@ local function drawOfficeView()
     end
 end
 
-local function drawAnims()
+
     if office.camsOpen then
         drawCameraFeed()
     else

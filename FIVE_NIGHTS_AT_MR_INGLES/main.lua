@@ -15,6 +15,7 @@ local game = {
     status = "",
 }
 local baseScale = 1
+local wobble = 0.4
 local power = {
     max = 100,
     current = 100,

@@ -12,14 +12,17 @@ This is a complete rewrite of the LOVE2D Lua game into Python using **Pygame**.
 
 ✅ **5 Nights** with increasing difficulty  
 ✅ **Power Management** - drain system with door/light/camera usage  
+✅ **Limited Door Uses** - 3 uses per door, restored when blocking attacks
 ✅ **Animatronics AI** - 4 animatronics with movement and attack logic  
 ✅ **Office & Camera Systems** - switch between office view and 6 camera feeds  
 ✅ **Door & Light Controls** - manage power-draining systems  
+✅ **Interactive Minimap** - clickable camera map with animatronic tracking
 ✅ **Time System** - survive from 12 AM to 6 AM  
 ✅ **Save System** - progress unlocks saved to JSON  
 ✅ **Sound & Music** - full audio support with ambience per night  
 ✅ **Jumpscare Events** - animatronics attack when doors are breached  
 ✅ **Win/Lose States** - complete game flow  
+✅ **Creepy Atmosphere** - static effects, flickering lights, screen shake  
 
 ## Installation
 
@@ -44,11 +47,12 @@ python main.py
 | Key | Action |
 |-----|--------|
 | **1-5** | Start Night (menu), Switch Camera (gameplay) |
-| **Q** | Toggle Left Door |
-| **E** | Toggle Right Door |
+| **Q** | Toggle Left Door (3 uses max) |
+| **E** | Toggle Right Door (3 uses max) |
 | **F** | Toggle Light/Flashlight |
 | **TAB** | Toggle Camera View |
 | **6** | Switch to Vent Camera |
+| **CLICK** | Click minimap to switch cameras |
 | **R** | Restart to Night 1 |
 | **M** | Return to Menu |
 | **ESC** | Quit Game |

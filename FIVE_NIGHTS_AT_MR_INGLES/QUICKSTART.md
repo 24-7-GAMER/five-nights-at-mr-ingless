@@ -8,9 +8,9 @@
 
 | Item | Original | New | Status |
 |------|----------|-----|--------|
-| **Main Game File** | main.lua (864 lines) | main.py (907 lines) | ✅ Complete |
+| **Main Game File** | main.lua (864 lines) | main.py (1135 lines) | ✅ Complete |
 | **Engine** | LOVE2D | Pygame 2.1.0+ | ✅ Modern |
-| **Game Mechanics** | 100% intact | 100% preserved | ✅ Perfect |
+| **Game Mechanics** | 100% intact | 100% preserved + enhancements | ✅ Enhanced |
 | **Assets** | Reused directly | Same file structure | ✅ Compatible |
 | **Code Structure** | Procedural | Object-Oriented (8 classes) | ✅ Improved |
 | **Documentation** | Basic | Comprehensive | ✅ Enhanced |
@@ -35,6 +35,8 @@
 ### Core Mechanics
 - ✅ 5 Night progression system
 - ✅ Power management with drain mechanics
+- ✅ **Limited door uses system** (3 uses per door)
+- ✅ **Door use restoration** (blocks restore uses when doors stop attacks)
 - ✅ 4 animatronics with AI pathfinding
 - ✅ 7-room environment with navigation graph
 - ✅ Office + 6 camera feed system
@@ -48,6 +50,16 @@
 ### Audio System
 - ✅ 5 SFX effects (door, light, jumpscare, bell)
 - ✅ Per-night ambience (5 unique tracks)
+
+### Visual Enhancements
+- ✅ Interactive minimap with clickable cameras
+- ✅ Animatronic position tracking on minimap
+- ✅ Faint minimap overlay during camera view
+- ✅ Creepy static effects and noise overlay
+- ✅ Screen shake on critical power
+- ✅ Flickering lights on low power
+- ✅ Animated gradient menu
+- ✅ Pulsing title and bobbing buttons
 - ✅ Menu theme
 - ✅ Volume controls
 

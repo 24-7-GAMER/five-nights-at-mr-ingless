@@ -167,6 +167,8 @@ run.bat
 bash run.sh
 ```
 
+Note: `run.bat` (Windows) and `run.sh` (Unix) are convenience launchers. They check for Python, install missing dependencies from `requirements.txt` if needed, then execute the game.
+
 **Direct:**
 ```bash
 python main.py

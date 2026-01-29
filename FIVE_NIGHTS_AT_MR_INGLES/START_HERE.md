@@ -121,6 +121,8 @@ bash run.sh
 python main.py
 ```
 
+Tip: Use the included `run.bat` (Windows) or `run.sh` (Unix) launcher to automatically check for Python and install dependencies before running.
+
 ### 3️⃣ Play!
 - Press **1-5** to select night
 - Use **Q/E** for doors

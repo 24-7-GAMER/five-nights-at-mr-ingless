@@ -42,6 +42,15 @@ pip install -r requirements.txt
 python main.py
 ```
 
+### Launcher scripts
+
+There are convenience scripts included to start the game:
+
+- `run.bat` — Windows launcher. Checks for Python, ensures dependencies, then runs `python main.py`.
+- `run.sh` — Unix/Linux/Mac launcher. Checks for `python3`, ensures dependencies, then runs `python3 main.py`.
+
+Both scripts are optional; you can run `python main.py` directly.
+
 ## Controls
 
 | Key | Action |

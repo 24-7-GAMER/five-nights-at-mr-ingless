@@ -1,6 +1,10 @@
 @echo off
 REM Five Nights at Mr Ingles's - Python Launcher
-REM This script sets up and runs the game
+REM This script sets up and runs the game on Windows.
+REM What this does:
+REM  - Checks for Python on PATH
+REM  - Ensures Pygame is installed (installs via pip using requirements.txt)
+REM  - Runs `python main.py`
 
 echo ========================================
 echo Five Nights at Mr Ingles's (Python)
@@ -31,4 +35,5 @@ if %errorlevel% neq 0 (
 echo.
 echo Starting game...
 python main.py
+REM Pause at the end so any error messages remain visible
 pause

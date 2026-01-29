@@ -1,5 +1,10 @@
 #!/bin/bash
 # Five Nights at Mr Ingles's - Python Launcher (Unix/Linux/Mac)
+# This script sets up and runs the game on Unix-like systems.
+# What this does:
+#  - checks for Python 3 on PATH
+#  - ensures Pygame is installed (installs via pip using requirements.txt)
+#  - runs `python3 main.py`
 
 echo "========================================"
 echo "Five Nights at Mr Ingles's (Python)"

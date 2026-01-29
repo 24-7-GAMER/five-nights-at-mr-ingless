@@ -357,6 +357,8 @@ bash run.sh
 python main.py
 ```
 
+Launcher scripts: `run.bat` (Windows) and `run.sh` (Unix) are provided. They perform a quick check for Python and install required dependencies from `requirements.txt` before running the game, so they are a convenient alternative to calling `python main.py` directly.
+
 ---
 
 ## What's Next?

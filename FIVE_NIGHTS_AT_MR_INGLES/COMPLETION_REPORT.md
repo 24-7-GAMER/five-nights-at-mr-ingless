@@ -523,6 +523,8 @@ The Python version is:
 
 Simply run `python main.py` and enjoy the game!
 
+Launcher scripts: `run.bat` (Windows) and `run.sh` (Unix) are included as convenience wrappers — they perform a quick check for Python and install dependencies from `requirements.txt` before launching the game.
+
 ---
 
 **Project Status**: ✅ **COMPLETE**  

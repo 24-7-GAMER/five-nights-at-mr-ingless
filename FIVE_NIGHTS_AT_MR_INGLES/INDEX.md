@@ -49,6 +49,8 @@ bash run.sh
 python main.py
 ```
 
+Alternatively, use the launchers `run.bat` (Windows) or `run.sh` (Unix) which perform a quick dependency check and then run the game.
+
 ### Step 3: Play!
 - Press **1-5** on the menu to start a night
 - Use **Q/E** to control doors

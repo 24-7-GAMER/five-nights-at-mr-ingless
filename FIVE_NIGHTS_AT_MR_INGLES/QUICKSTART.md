@@ -8,11 +8,12 @@
 
 | Item | Original | New | Status |
 |------|----------|-----|--------|
-| **Main Game File** | main.lua (864 lines) | main.py (1135 lines) | ✅ Complete |
+| **Main Game File** | main.lua (864 lines) | main.py (1,712 lines) | ✅ Complete + Enhanced |
 | **Engine** | LOVE2D | Pygame 2.1.0+ | ✅ Modern |
-| **Game Mechanics** | 100% intact | 100% preserved + enhancements | ✅ Enhanced |
+| **Game Mechanics** | 100% intact | 100% preserved + AI enhancements | ✅ Enhanced |
 | **Assets** | Reused directly | Same file structure | ✅ Compatible |
-| **Code Structure** | Procedural | Object-Oriented (8 classes) | ✅ Improved |
+| **Code Structure** | Procedural | Object-Oriented (9 classes) | ✅ Improved |
+| **AI System** | Basic pathfinding | Advanced learning with mood & coordination | ✅ Cutting-edge |
 | **Documentation** | Basic | Comprehensive | ✅ Enhanced |
 
 ---
@@ -20,10 +21,12 @@
 ## Files Created
 
 ```
-✅ main.py                  → Complete Python game (907 lines)
+✅ main.py                  → Complete Python game (1,712 lines)
 ✅ requirements.txt         → Dependency management
 ✅ README_PYTHON.md         → User documentation
 ✅ CONVERSION_REPORT.md     → Detailed technical report
+✅ AI_FEATURES.md           → Advanced AI system documentation
+✅ CHANGELOG.md             → Latest updates and changes
 ✅ run.bat                  → Windows launcher
 ✅ run.sh                   → Unix/Linux/Mac launcher
 ```
@@ -133,18 +136,19 @@ class Game:
 
 ---
 
-## Classes Created (8 Total)
+## Classes Created (9 Total)
 
-| Class | Purpose | Lines |
-|-------|---------|-------|
-| `GameState` | Main game state | 20 |
-| `PowerSystem` | Power drain mechanics | 15 |
-| `Office` | Office controls & effects | 20 |
-| `CameraSystem` | Camera switching | 15 |
-| `Jumpscare` | Jumpscare events | 15 |
-| `Animatronic` | AI behavior & movement | 50 |
-| `AssetManager` | Image/sound loading | 80 |
-| `Game` | Main engine | 650 |
+| Class | Purpose | Features |
+|-------|---------|----------|
+| `GameState` | Main game state | Night, time, power, score tracking |
+| `PowerSystem` | Power drain mechanics | Usage tracking, outage events |
+| `Office` | Office controls & effects | Doors, lights, animations |
+| `CameraSystem` | Camera switching | 6 camera feeds + minimap |
+| `Jumpscare` | Jumpscare events | Attack animations and effects |
+| `Animatronic` | Advanced AI behavior | Mood, learning, hunting, coordination |
+| `AssetManager` | Image/sound loading | Sprite and audio management |
+| `Jumpscare` | Visual effects | Jumpscare screens |
+| `Game` | Main engine | Orchestration, update & render loop |
 | **TOTAL** | | **865 lines** |
 
 ---
@@ -193,6 +197,25 @@ python main.py
 - Clean, readable code
 - Well-commented
 - Type-hint compatible
+
+---
+
+## 🧠 Advanced AI System (New in Python Edition!)
+
+This Python version includes **cutting-edge AI features** that distinguish it from basic FNAF clones:
+
+### AI Capabilities
+✅ **Mood System** - Animatronics have 5 emotional states  
+✅ **Adaptive Learning** - Remember player defense patterns  
+✅ **Hunting Mode** - Coordinated pursuits with pathfinding  
+✅ **Player Memory** - Learn which doors/strategies player uses  
+✅ **Communication** - Coordinate attacks between animatronics  
+✅ **Dynamic Difficulty** - Adapt to player skill level  
+✅ **Strategic Thinking** - Block counting, preferred paths, pack hunting  
+
+**See [AI_FEATURES.md](AI_FEATURES.md) for complete documentation.**
+
+---
 
 ### Engine: Pygame 2.1.0+
 - Cross-platform (Windows, Linux, Mac)

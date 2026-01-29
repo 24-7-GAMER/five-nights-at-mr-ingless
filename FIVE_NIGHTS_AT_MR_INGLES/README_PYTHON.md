@@ -13,11 +13,14 @@ This is a complete rewrite of the LOVE2D Lua game into Python using **Pygame**.
 ✅ **5 Nights** with increasing difficulty  
 ✅ **Power Management** - drain system with door/light/camera usage  
 ✅ **Limited Door Uses** - 3 uses per door, restored when blocking attacks
-✅ **Animatronics AI** - 4 animatronics with movement and attack logic  
+✅ **Advanced Animatronics AI** - 4 animatronics with cutting-edge learning & coordination  
+✅ **Mood System** - animatronics have dynamic emotional states that affect behavior  
+✅ **Adaptive Learning** - animatronics learn from player patterns and adjust strategy  
+✅ **Hunting Mode** - coordinated pursuits with pathfinding and pack tactics  
 ✅ **Office & Camera Systems** - switch between office view and 6 camera feeds  
 ✅ **Door & Light Controls** - manage power-draining systems  
 ✅ **Interactive Minimap** - clickable camera map with animatronic tracking
-✅ **Time System** - survive from 12 AM to 6 AM  
+✅ **Time System** - survive from 12 AM to 6 AM (configurable night length)  
 ✅ **Save System** - progress unlocks saved to JSON  
 ✅ **Sound & Music** - full audio support with ambience per night  
 ✅ **Jumpscare Events** - animatronics attack when doors are breached  
@@ -73,11 +76,18 @@ Both scripts are optional; you can run `python main.py` directly.
 - `PowerSystem` - Power drain mechanics
 - `Office` - Office state and visual effects
 - `CameraSystem` - Camera switching logic
-- `Animatronic` - Individual animatronic behavior
+- `Animatronic` - Individual animatronic with advanced AI (mood, learning, hunting, coordination)
 - `AssetManager` - Image/sound/music loading
-- `Game` - Main game engine
+- `Game` - Main game engine with AI coordination
 
-### Asset Structure
+### Advanced AI Features
+See **[AI_FEATURES.md](AI_FEATURES.md)** for comprehensive documentation of:
+- Mood system (5 emotional states)
+- Adaptive aggression learning
+- Hunting mode with pathfinding
+- AI communication & pack tactics
+- Dynamic difficulty scaling
+- Player behavior memory
 ```
 assets/
   img/              # All sprite images
@@ -144,9 +154,15 @@ Potential additions now that we're in Python:
 - Analytics/statistics tracking
 - Mobile port (Kivy)
 
+## Latest Updates
+
+**January 29, 2026**: 
+- ✨ Implemented advanced AI system with mood, learning, and coordination
+- 💡 Increased flashlight brightness for better visibility
+- 📋 See [CHANGELOG.md](CHANGELOG.md) for complete update history
+
 ---
 
-**Developed by**: [Your Name]  
-**Original LOVE2D Version**: [Original Author]  
+**Last Updated**: January 29, 2026  
 **Engine**: Pygame 2.1.0+  
 **Python**: 3.7+

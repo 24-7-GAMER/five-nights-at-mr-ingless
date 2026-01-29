@@ -57,6 +57,7 @@ class GameState:
         self.hour = 12
         self.hour_timer = 0
         self.seconds_per_hour = 60
+        self.minutes_elapsed = 0  # minutes since 12:00 for current night
         self.width = WINDOW_WIDTH
         self.height = WINDOW_HEIGHT
         self.status = ""
@@ -72,10 +73,10 @@ class PowerSystem:
     def __init__(self):
         self.max = 100
         self.current = 100
-        self.base_drain = 0.35
-        self.door_drain = 0.50
-        self.light_drain = 0.50
-        self.cam_drain = 0.60
+        self.base_drain = 0.125  # 25% faster drain
+        self.door_drain = 0.1875  # 25% faster drain
+        self.light_drain = 0.1875  # 25% faster drain
+        self.cam_drain = 0.25   # 25% faster drain
         self.outage = False
 
     def reset(self):
@@ -176,7 +177,7 @@ def get_neighbors(room):
 # =====================================================
 
 class Animatronic:
-    """Animatronic character"""
+    """Animatronic character with advanced AI"""
     def __init__(self, name, start_room, base_aggro, base_interval, style="teleport"):
         self.name = name
         self.room = start_room
@@ -190,29 +191,136 @@ class Animatronic:
         self.target_x = self.x
         self.target_y = self.y
         self.visible_on_cam = True
+        
+        # Advanced AI features
+        self.mood = "neutral"  # neutral, aggressive, cautious, hunting, retreating
+        self.mood_timer = 0
+        self.mood_duration = random.uniform(8, 15)
+        self.player_action_memory = []  # remember recent player actions
+        self.target_player_room = None  # predicted player location
+        self.communication_cooldown = 0
+        self.hunting_mode = False
+        self.hunt_target_room = None
+        self.adaptive_aggro = base_aggro  # adjusts based on learning
+        self.last_blocked_time = 0
+        self.block_count = 0
+        self.preferred_path = []  # learns efficient routes
 
-    def update(self, dt):
-        """Update animatronic position and behavior"""
+    def update(self, dt, game_state=None):
+        """Update animatronic with advanced AI"""
         self.timer += dt
-        interval = self.move_interval
-        chance = self.aggro
-
-        if self.timer >= interval:
-            self.timer -= interval
-            if random.random() < chance:
-                self.move()
-
+        self.mood_timer += dt
+        
+        # Update mood state (affects behavior)
+        if self.mood_timer >= self.mood_duration:
+            self.update_mood(game_state)
+            self.mood_timer = 0
+            self.mood_duration = random.uniform(8, 15)
+        
+        # Adaptive aggression based on learning
+        self.adaptive_aggro = self.base_aggro + (self.block_count * 0.05)
+        interval = self.move_interval / (1.0 + self.adaptive_aggro * 0.3)
+        chance = self.adaptive_aggro * self.get_mood_multiplier()
+        
+        # Hunting mode AI
+        if self.hunting_mode:
+            if random.random() < 0.7:  # 70% chance to pursue target
+                self.move_toward_target(self.hunt_target_room)
+            else:
+                self.move()  # occasional randomness
+        else:
+            # Standard movement with learning
+            if self.timer >= interval:
+                self.timer -= interval
+                if random.random() < chance:
+                    self.move()
+        
         # Smooth position toward target
         speed = 4 * dt
         self.x += (self.target_x - self.x) * speed
         self.y += (self.target_y - self.y) * speed
+        
+        # Communication cooldown
+        if self.communication_cooldown > 0:
+            self.communication_cooldown -= dt
+        
+        # Hunting timeout
+        if self.hunting_mode and time.time() - self.last_blocked_time > 20:
+            self.hunting_mode = False
+            self.hunt_target_room = None
+
+    def update_mood(self, game_state=None):
+        """Update mood based on situation"""
+        if self.block_count > 5:
+            self.mood = "aggressive"  # frustrated from being blocked
+        elif self.block_count > 2:
+            self.mood = random.choice(["aggressive", "hunting"])
+        else:
+            self.mood = random.choice(["neutral", "cautious"])
+
+    def get_mood_multiplier(self):
+        """Get aggression multiplier based on mood"""
+        mood_map = {
+            "neutral": 1.0,
+            "cautious": 0.7,
+            "aggressive": 1.4,
+            "hunting": 1.6,
+            "retreating": 0.5
+        }
+        return mood_map.get(self.mood, 1.0)
 
     def move(self):
-        """Move to a random adjacent room"""
+        """Move to a random adjacent room or use learned paths"""
         neighbors = get_neighbors(self.room)
         if neighbors:
-            self.room = random.choice(neighbors)
+            # 60% chance to use learned optimal path, 40% random
+            if self.preferred_path and random.random() < 0.6:
+                self.room = self.preferred_path[0] if self.preferred_path else random.choice(neighbors)
+            else:
+                self.room = random.choice(neighbors)
+                self.preferred_path = [self.room]
+            
             self.target_x, self.target_y = room_position(self.room, WINDOW_WIDTH, WINDOW_HEIGHT)
+
+    def move_toward_target(self, target_room):
+        """Move toward a specific target room"""
+        if not target_room or target_room == self.room:
+            return
+        
+        neighbors = get_neighbors(self.room)
+        if not neighbors:
+            return
+        
+        # Simple pathfinding: move toward target
+        best_room = self.room
+        if target_room in neighbors:
+            best_room = target_room
+        else:
+            # Move closer to target (greedy pathfinding)
+            for neighbor in neighbors:
+                if self._distance_to_room(neighbor, target_room) < self._distance_to_room(best_room, target_room):
+                    best_room = neighbor
+        
+        if best_room != self.room:
+            self.room = best_room
+            self.target_x, self.target_y = room_position(self.room, WINDOW_WIDTH, WINDOW_HEIGHT)
+
+    def _distance_to_room(self, from_room, to_room):
+        """Estimate distance between rooms"""
+        if from_room == to_room:
+            return 0
+        # Simple heuristic: count edges to target
+        visited = {from_room}
+        queue = [(from_room, 0)]
+        while queue:
+            current, dist = queue.pop(0)
+            if current == to_room:
+                return dist
+            for neighbor in get_neighbors(current):
+                if neighbor not in visited:
+                    visited.add(neighbor)
+                    queue.append((neighbor, dist + 1))
+        return 999
 
     def try_attack(self, office):
         """Try to attack if in office"""
@@ -229,10 +337,31 @@ class Animatronic:
         """Check which door is blocking this animatronic (if any)"""
         if self.room == "Office" and self.name != "Vent Crawler":
             if office.door_left_closed:
+                self.handle_blocked("left")
                 return "left"
             elif office.door_right_closed:
+                self.handle_blocked("right")
                 return "right"
         return None
+
+    def handle_blocked(self, side):
+        """Handle being blocked - learning and mood change"""
+        self.block_count += 1
+        self.last_blocked_time = time.time()
+        self.hunting_mode = True
+        self.hunt_target_room = "Office"
+        self.mood = "aggressive"
+        # MUST leave the office - find a neighboring room and move there immediately
+        if self.room == "Office":
+            neighbors = get_neighbors(self.room)
+            if neighbors:
+                # Pick a random neighbor, don't stay in office
+                self.room = random.choice(neighbors)
+                self.target_x, self.target_y = room_position(self.room, 1280, 720)
+                self.x = self.target_x
+                self.y = self.target_y
+        # Record this memory for future behavior
+        self.player_action_memory.append({"action": "blocked", "side": side, "time": time.time()})
 
 
 # =====================================================
@@ -292,6 +421,8 @@ class AssetManager:
         self.load_image("cam_library", "assets/img/cam_library.png")
         self.load_image("cam_bathrooms", "assets/img/cam_bathrooms.png")
         self.load_image("cam_vent", "assets/img/cam_vent.png")
+        self.load_image("title", "assets/img/title.png")
+        self.load_image("menu_background", "assets/img/menu_background.png")
         self.load_image("anim_mr_ingles", "assets/img/anim_mr_ingles.png")
         self.load_image("anim_janitor", "assets/img/anim_janitor.png")
         self.load_image("anim_librarian", "assets/img/anim_librarian.png")
@@ -368,7 +499,7 @@ class Game:
         # Animatronics list
         self.animatronics = []
 
-        # Fonts
+        # Fonts (scaled for 1280x720 resolution)
         self.font_small = pygame.font.Font(None, 20)
         self.font_medium = pygame.font.Font(None, 32)
         self.font_large = pygame.font.Font(None, 64)
@@ -376,12 +507,36 @@ class Game:
         self.font_button = pygame.font.Font(None, 36)
         
         # Visual effects
-        self.screen_shake = 0
+        self.screen_shake = 1
         self.flicker_timer = 0
-        self.static_intensity = 0
+        self.static_intensity = 1
         
         # Minimap data
         self.minimap_room_positions = {}
+
+        # Menu slider (night length)
+        self.slider_min = 15.0   # seconds per in-game hour (fast)
+        self.slider_max = 180.0  # seconds per in-game hour (slow)
+        self.dragging_slider = False
+        self.slider_hover = False
+
+        # Intro sequence (Night 1)
+        self.intro_messages = []
+        self.intro_index = 0
+        self.intro_timer = 0.0
+        self.intro_message_duration = 1.5  # seconds per message (incl fade in/out)
+        
+        # Tutorial slideshow (after intro)
+        self.tutorial_index = 0
+        self.tutorial_timer = 0.0
+        self.tutorial_slide_duration = 4.0  # seconds per slide
+        self.tutorial_slides = [
+            {"title": "CONTROLS", "text": "Use Q and E to control the doors\nQ = LEFT DOOR  |  E = RIGHT DOOR"},
+            {"title": "MANAGING POWER", "text": "F toggles the office light\nMonitor power usage carefully\nKeep an eye on the power bar"},
+            {"title": "CAMERAS", "text": "Press TAB to open/close cameras\nPress 1-6 to switch camera feeds\nClick the minimap to jump to rooms"},
+            {"title": "SURVIVAL", "text": "Block animatronics with doors\nManage your power wisely\nSurvive until 6 AM to win!"},
+            {"title": "GOOD LUCK!", "text": "Watch the animatronics carefully\nThey learn from your patterns\nStay alert and survive the night!"},
+        ]
 
         # Load everything
         self.assets.load_all_assets()
@@ -466,16 +621,6 @@ class Game:
             label_rect = label_text.get_rect(center=pos)
             self.screen.blit(label_text, (label_rect.x - 2, label_rect.y - 3))
         
-        # Draw animatronics on minimap
-        for anim in self.animatronics:
-            if anim.room in room_positions:
-                anim_pos = room_positions[anim.room]
-                # Pulsing indicator for animatronic
-                pulse = math.sin(time.time() * 3) * 0.3 + 0.7
-                anim_color = (int(255 * pulse), int(100 * pulse), 0)
-                pygame.draw.circle(self.screen, anim_color, (int(anim_pos[0]), int(anim_pos[1])), 5)
-                pygame.draw.circle(self.screen, (255, 150, 50), (int(anim_pos[0]), int(anim_pos[1])), 5, 1)
-        
         # Legend
         legend_y = minimap_y + minimap_height - 25
         green_dot = pygame.Surface((6, 6))
@@ -532,19 +677,67 @@ class Game:
         """Start a new night"""
         self.assets.stop_music()
         self.game_state.night = self.clamp(night, 1, 5)
-        self.game_state.state = "playing"
         self.set_status("")
         self.power.reset()
         self.office.reset()
         self.reset_animatronics()
         self.jumpscare.reset()
         self.cameras.current_index = 0
+        # Reset time counters
+        self.game_state.hour = 12
+        self.game_state.hour_timer = 0
+        self.game_state.minutes_elapsed = 0
+        
+        # Apply adaptive difficulty based on previous performance
+        self.apply_adaptive_difficulty()
 
-        # Load and play night ambience
-        ambience_key = f"ambience_n{self.game_state.night}"
-        self.assets.play_music(ambience_key)
+        # Intro sequence only for Night 1
+        if self.game_state.night == 1:
+            self.game_state.state = "intro"
+            self.intro_messages = [
+                "YOU'RE IN THE SCIENCE BLOCK.",
+                "ALONE.",
+                "HIDING IN MR. INGLES'S OFFICE.",
+                "MR. INGLES AND HIS ARMY ARE WATCHING.",
+                "DON'T GET CAUGHT.",
+            ]
+            self.intro_index = 0
+            self.intro_timer = 0.0
+        else:
+            # Load and play night ambience
+            ambience_key = f"ambience_n{self.game_state.night}"
+            self.assets.play_music(ambience_key)
+            self.game_state.state = "playing"
+            self.game_state.start_time = time.time()
+            self.game_state.hour_timer = 0
+            self.game_state.minutes_elapsed = 0
 
-        self.game_state.start_time = time.time()
+    def apply_adaptive_difficulty(self):
+        """Adjust animatronic difficulty based on player performance"""
+        if self.game_state.night < 2:
+            return
+        
+        # Base difficulty increases per night
+        night_factor = 0.15 * (self.game_state.night - 1)
+        
+        # Analyze player performance from previous nights (use door usage patterns)
+        successful_defenses = sum([a.block_count for a in self.animatronics]) / max(1, len(self.animatronics))
+        
+        # If player was very successful at blocking, make animatronics more aggressive
+        if successful_defenses > 5:
+            difficulty_boost = 0.2
+        elif successful_defenses > 2:
+            difficulty_boost = 0.1
+        else:
+            difficulty_boost = 0.0
+        
+        # Apply difficulty adjustments to animatronics
+        for anim in self.animatronics:
+            anim.base_aggro = anim.base_aggro * (1.0 + night_factor + difficulty_boost)
+            anim.aggro = anim.base_aggro
+            # Reset learning for new night but keep personality
+            anim.block_count = max(0, anim.block_count - 3)
+            anim.player_action_memory.clear()
 
     def restart_from_menu(self):
         """Return to menu"""
@@ -615,13 +808,18 @@ class Game:
                 self.screen_shake = 3
             return
 
-        drain = self.power.base_drain
+        # Scale drain based on night length - gentler scaling
+        # Default is 60 seconds/hour, scale from 0.7 to 1.3 across the range
+        speed_ratio = self.game_state.seconds_per_hour / 60.0
+        speed_multiplier = 0.5 + (speed_ratio * 0.5)  # Ranges from 0.75 (at 15s) to 1.25 (at 180s)
+        
+        drain = self.power.base_drain * speed_multiplier
         if self.office.door_left_closed or self.office.door_right_closed:
-            drain += self.power.door_drain
+            drain += self.power.door_drain * speed_multiplier
         if self.office.light_on:
-            drain += self.power.light_drain
+            drain += self.power.light_drain * speed_multiplier
         if self.office.cams_open:
-            drain += self.power.cam_drain
+            drain += self.power.cam_drain * speed_multiplier
 
         self.power.current -= drain * dt
         if self.power.current < 0:
@@ -635,27 +833,38 @@ class Game:
         """Update in-game time"""
         if self.game_state.state != "playing":
             return
-
+        # advance time by minutes using configured seconds_per_hour
+        seconds_per_minute = max(0.01, self.game_state.seconds_per_hour / 60.0)
         self.game_state.hour_timer += dt
-        if self.game_state.hour_timer >= self.game_state.seconds_per_hour:
-            self.game_state.hour_timer -= self.game_state.seconds_per_hour
-            self.game_state.hour += 1
+        # increment minutes as many as passed
+        while self.game_state.hour_timer >= seconds_per_minute:
+            self.game_state.hour_timer -= seconds_per_minute
+            self.game_state.minutes_elapsed += 1
 
-            if self.game_state.hour >= 6:
+            # Win condition: reached 6 AM (6 hours after 12:00)
+            if self.game_state.minutes_elapsed >= 6 * 60:
                 self.game_state.state = "win"
                 self.set_status(f"6 AM! You survived Night {self.game_state.night}!")
                 self.assets.play_sound("bell_6am")
                 self.assets.stop_music()
 
                 if (self.game_state.night < 5 and
-                    self.game_state.night + 1 > self.game_state.max_night_unlocked):
+                        self.game_state.night + 1 > self.game_state.max_night_unlocked):
                     self.game_state.max_night_unlocked = self.game_state.night + 1
                     self.save_progress()
+                break
 
     def update_animatronics(self, dt):
-        """Update all animatronics"""
+        """Update all animatronics with advanced AI coordination"""
+        # First pass: update each animatronic
         for anim in self.animatronics:
-            anim.update(dt)
+            anim.update(dt, self.game_state)
+        
+        # Second pass: AI coordination and communication
+        self.coordinate_animatronics(dt)
+        
+        # Third pass: check for attacks and blocked behaviors
+        for anim in self.animatronics:
             # Check if animatronic was blocked by a door
             blocked_side = anim.get_blocked_side(self.office)
             if blocked_side and anim.room == "Office":
@@ -674,10 +883,62 @@ class Game:
                 self.game_state.state = "jumpscare"
                 self.assets.play_sound("jumpscare")
                 self.assets.stop_music()
+                break
+
+    def coordinate_animatronics(self, dt):
+        """AI coordination: animatronics communicate and plan coordinated attacks"""
+        if len(self.animatronics) < 2:
+            return
+        
+        # Check if any animatronic is in hunting mode and communicate
+        hunters = [a for a in self.animatronics if a.hunting_mode]
+        
+        if hunters:
+            # Share intelligence: if one is hunting, spread the target
+            target_room = hunters[0].hunt_target_room
+            for anim in self.animatronics:
+                if not anim.hunting_mode and anim.communication_cooldown <= 0:
+                    # Coordinate: 40% chance to join the hunt
+                    if random.random() < 0.4:
+                        anim.hunting_mode = True
+                        anim.hunt_target_room = target_room
+                        anim.mood = "hunting"
+                        anim.communication_cooldown = random.uniform(5, 10)
+        
+        # Predict player door preference and adapt strategy
+        for anim in self.animatronics:
+            if anim.player_action_memory:
+                recent_actions = [a for a in anim.player_action_memory if time.time() - a["time"] < 60]
+                if len(recent_actions) > 2:
+                    # Player is blocking a specific side repeatedly
+                    blocked_sides = [a["side"] for a in recent_actions[-5:]]
+                    if blocked_sides.count("left") > blocked_sides.count("right"):
+                        anim.prefer_side = "right"  # Try to attack from other side
+                    elif blocked_sides.count("right") > blocked_sides.count("left"):
+                        anim.prefer_side = "left"
+        
+        # Pack hunting behavior: multiple animatronics moving together
+        at_office = [a for a in self.animatronics if a.room == "Office"]
+        if len(at_office) >= 2 and random.random() < 0.1:
+            # Increase mood and aggression for coordinated attack
+            for anim in at_office:
+                anim.mood = "aggressive"
+                anim.adaptive_aggro += 0.1
+                anim.block_count += 1  # simulate frustration from failed attacks
 
     def update(self, dt):
         """Main update loop"""
         if self.game_state.state == "menu":
+            return
+
+        if self.game_state.state == "intro":
+            self.update_intro(dt)
+            # keep updating visual effects (optional)
+            self.update_office_effects(dt)
+            return
+
+        if self.game_state.state == "tutorial":
+            self.update_tutorial(dt)
             return
 
         if self.game_state.state == "playing":
@@ -688,6 +949,201 @@ class Game:
             self.jumpscare.timer += dt
 
         self.update_office_effects(dt)
+
+    def update_intro(self, dt):
+        """Update intro message sequence (fade in/out per message)"""
+        if self.game_state.state != "intro":
+            return
+
+        self.intro_timer += dt
+        total = self.intro_message_duration
+        # determine if we should advance to next message
+        if self.intro_timer >= (self.intro_index + 1) * total:
+            self.intro_index += 1
+
+        # If finished all messages, show tutorial (only on Night 1)
+        if self.intro_index >= len(self.intro_messages):
+            if self.game_state.night == 1:
+                # Show tutorial slideshow
+                self.game_state.state = "tutorial"
+                self.tutorial_index = 0
+                self.tutorial_timer = 0.0
+            else:
+                # Skip tutorial on other nights, go straight to playing
+                ambience_key = f"ambience_n{self.game_state.night}"
+                self.assets.play_music(ambience_key)
+                self.game_state.state = "playing"
+                self.game_state.start_time = time.time()
+                self.game_state.hour_timer = 0
+                self.game_state.minutes_elapsed = 0
+            # reset intro trackers
+            self.intro_messages = []
+            self.intro_index = 0
+            self.intro_timer = 0.0
+
+    def draw_intro(self):
+        """Draw the fading intro messages"""
+        # dark background
+        self.screen.fill((0, 0, 0))
+
+        if not self.intro_messages:
+            return
+
+        total = self.intro_message_duration
+        # local time within current message
+        t = self.intro_timer - (self.intro_index * total)
+        if t < 0:
+            t = 0.0
+
+        # fade timings
+        # fade timings as fractions of total duration
+        fade_in = total * 0.2
+        hold = total * 0.6
+        fade_out = max(0.0, total - (fade_in + hold))
+
+        if t < fade_in:
+            alpha = t / fade_in
+        elif t < (fade_in + hold):
+            alpha = 1.0
+        elif fade_out > 0:
+            alpha = 1.0 - ((t - fade_in - hold) / fade_out)
+        else:
+            alpha = 0.0
+
+        alpha = self.clamp(alpha, 0.0, 1.0)
+        color_val = int(255 * alpha)
+
+        msg = self.intro_messages[self.intro_index] if self.intro_index < len(self.intro_messages) else ""
+        # choose a prominent font; use font_large
+        text_surf = self.font_large.render(msg, True, (color_val, color_val, color_val))
+        text_rect = text_surf.get_rect(center=(self.game_state.width // 2, int(self.game_state.height * 0.45)))
+        # draw a subtle drop shadow for readability
+        shadow = self.font_large.render(msg, True, (10, 10, 10))
+        shadow_rect = shadow.get_rect(center=(text_rect.centerx + 4, text_rect.centery + 4))
+        shadow.set_alpha(int(200 * alpha))
+        self.screen.blit(shadow, shadow_rect)
+        text_surf.set_alpha(int(255 * alpha))
+        self.screen.blit(text_surf, text_rect)
+
+    def update_tutorial(self, dt):
+        """Update tutorial slideshow"""
+        if self.game_state.state != "tutorial":
+            return
+        
+        self.tutorial_timer += dt
+        
+        # Advance to next slide
+        if self.tutorial_timer >= self.tutorial_slide_duration:
+            self.tutorial_index += 1
+            self.tutorial_timer = 0.0
+        
+        # If tutorial finished, start actual gameplay
+        if self.tutorial_index >= len(self.tutorial_slides):
+            ambience_key = f"ambience_n{self.game_state.night}"
+            self.assets.play_music(ambience_key)
+            self.game_state.state = "playing"
+            self.game_state.start_time = time.time()
+            self.game_state.hour_timer = 0
+            self.game_state.minutes_elapsed = 0
+            self.tutorial_index = 0
+            self.tutorial_timer = 0.0
+
+    def draw_tutorial(self):
+        """Draw tutorial slideshow"""
+        # Dark background
+        self.screen.fill((5, 5, 15))
+        
+        if self.tutorial_index >= len(self.tutorial_slides):
+            return
+        
+        slide = self.tutorial_slides[self.tutorial_index]
+        
+        # Fade effect
+        fade_in_time = 0.5
+        fade_out_time = self.tutorial_slide_duration - 0.5
+        
+        if self.tutorial_timer < fade_in_time:
+            alpha_ratio = self.tutorial_timer / fade_in_time
+        elif self.tutorial_timer > fade_out_time:
+            alpha_ratio = 1.0 - (self.tutorial_timer - fade_out_time) / 0.5
+        else:
+            alpha_ratio = 1.0
+        
+        # Gradient background (dark to darker)
+        for y in range(self.game_state.height):
+            ratio = y / self.game_state.height
+            r = int(10 * (1 - ratio * 0.3))
+            g = int(10 * (1 - ratio * 0.3))
+            b = int(20 * (1 - ratio * 0.2))
+            pygame.draw.line(self.screen, (r, g, b), (0, y), (self.game_state.width, y))
+        
+        # Main content panel with border
+        panel_width = int(self.game_state.width * 0.75)
+        panel_height = int(self.game_state.height * 0.65)
+        panel_x = (self.game_state.width - panel_width) // 2
+        panel_y = int(self.game_state.height * 0.15)
+        
+        # Panel background with semi-transparency
+        panel_surf = pygame.Surface((panel_width, panel_height))
+        panel_surf.set_alpha(int(220 * alpha_ratio))
+        panel_surf.fill((25, 35, 50))
+        self.screen.blit(panel_surf, (panel_x, panel_y))
+        
+        # Panel border
+        border_color = (100, 200, 255)
+        pygame.draw.rect(self.screen, border_color, (panel_x, panel_y, panel_width, panel_height), 3)
+        
+        # Title with glow effect
+        title_text = self.font_title.render(slide["title"], True, (100, 220, 255))
+        title_rect = title_text.get_rect(center=(self.game_state.width // 2, int(self.game_state.height * 0.22)))
+        
+        # Glow effect (draw shadow multiple times)
+        for i in range(3, 0, -1):
+            glow = self.font_title.render(slide["title"], True, (50, 120, 150))
+            glow.set_alpha(int(100 * (3-i) * alpha_ratio / 3))
+            glow_rect = glow.get_rect(center=(title_rect.centerx, title_rect.centery))
+            self.screen.blit(glow, (glow_rect.x + i, glow_rect.y + i))
+        
+        title_text.set_alpha(int(255 * alpha_ratio))
+        self.screen.blit(title_text, title_rect)
+        
+        # Content lines
+        content_lines = slide["text"].split("\\n")
+        y_offset = int(self.game_state.height * 0.35)
+        line_spacing = int(self.game_state.height * 0.12)
+        
+        for line in content_lines:
+            line_text = self.font_medium.render(line, True, (220, 220, 220))
+            line_text.set_alpha(int(255 * alpha_ratio))
+            line_rect = line_text.get_rect(center=(self.game_state.width // 2, y_offset))
+            self.screen.blit(line_text, line_rect)
+            y_offset += line_spacing
+        
+        # Progress bar at bottom
+        progress_ratio = (self.tutorial_index + 1) / len(self.tutorial_slides)
+        progress_bar_width = int(self.game_state.width * 0.6)
+        progress_bar_height = 20
+        progress_bar_x = (self.game_state.width - progress_bar_width) // 2
+        progress_bar_y = int(self.game_state.height * 0.8)
+        
+        # Background bar
+        pygame.draw.rect(self.screen, (40, 40, 60), (progress_bar_x, progress_bar_y, progress_bar_width, progress_bar_height))
+        # Progress bar
+        pygame.draw.rect(self.screen, (100, 200, 255), (progress_bar_x, progress_bar_y, int(progress_bar_width * progress_ratio), progress_bar_height))
+        # Border
+        pygame.draw.rect(self.screen, (150, 200, 255), (progress_bar_x, progress_bar_y, progress_bar_width, progress_bar_height), 2)
+        
+        # Progress text
+        progress_text = self.font_small.render(f"Slide {self.tutorial_index + 1} / {len(self.tutorial_slides)}", True, (150, 200, 220))
+        progress_text.set_alpha(int(220 * alpha_ratio))
+        progress_rect = progress_text.get_rect(center=(self.game_state.width // 2, int(self.game_state.height * 0.86)))
+        self.screen.blit(progress_text, progress_rect)
+        
+        # Skip instruction with highlight
+        skip_text = self.font_small.render("Press SPACE to skip", True, (180, 180, 200))
+        skip_text.set_alpha(int(180 * alpha_ratio))
+        skip_rect = skip_text.get_rect(center=(self.game_state.width // 2, int(self.game_state.height * 0.93)))
+        self.screen.blit(skip_text, skip_rect)
 
     # =====================================================
     # DRAWING FUNCTIONS
@@ -739,8 +1195,8 @@ class Game:
                 scale = self.game_state.height / door_img.get_height()
                 scaled = pygame.transform.scale(door_img, 
                     (int(door_img.get_width() * scale), int(door_img.get_height() * scale)))
-                slide = 1 - self.office.door_left_progress
-                x = -scaled.get_width() * (1 - slide)
+                # When progress=0 (open): x=-width, when progress=1 (closed): x=0
+                x = -scaled.get_width() + scaled.get_width() * self.office.door_left_progress
                 self.screen.blit(scaled, (int(x), 0))
 
         # Right door
@@ -760,6 +1216,13 @@ class Game:
             dim_surface.set_alpha(int(255 * self.office.light_dim))
             dim_surface.fill((0, 0, 0))
             self.screen.blit(dim_surface, (0, 0))
+        
+        # Flashlight brightness boost - bright white overlay when light is on
+        if self.office.light_on:
+            brightness_boost = pygame.Surface((self.game_state.width, self.game_state.height))
+            brightness_boost.set_alpha(80)  # Strong brightness boost
+            brightness_boost.fill((255, 255, 255))
+            self.screen.blit(brightness_boost, (0, 0))
 
         # Vignette
         for i in range(1, 7):
@@ -810,10 +1273,12 @@ class Game:
         cam_text = self.font_medium.render(f"CAM: {cam_name}", True, (0, 255, 255))
         self.screen.blit(cam_text, (20, 20))
 
-        # Scanlines overlay
+        # Scanlines overlay - subtle and dim
         for y in range(0, self.game_state.height, 8):
-            pygame.draw.line(self.screen, (0, 255, 255), (0, y), (self.game_state.width, y))
-            pygame.draw.line(self.screen, (0, 255, 255), (0, y), (self.game_state.width, y))
+            scanline = pygame.Surface((self.game_state.width, 1))
+            scanline.set_alpha(20)  # very subtle
+            scanline.fill((0, 200, 200))
+            self.screen.blit(scanline, (0, y))
 
         # Static flash overlay
         if self.office.cam_flash > 0:
@@ -856,9 +1321,11 @@ class Game:
                          int(bar_width * power_val / 100), bar_height))
         pygame.draw.rect(self.screen, (150, 150, 150), (20, self.game_state.height - 50, bar_width, bar_height), 2)
         
-        # Power text
-        power_text = self.font_small.render(f"POWER: {power_val}%", True, power_color)
-        self.screen.blit(power_text, (30, self.game_state.height - 47))
+        # Power text with dark background for contrast
+        power_text = self.font_small.render(f"POWER: {power_val}%", True, (255, 255, 255))
+        power_rect = power_text.get_rect(topleft=(30, self.game_state.height - 47))
+        pygame.draw.rect(self.screen, (0, 0, 0), (power_rect.x - 3, power_rect.y - 2, power_rect.width + 6, power_rect.height + 4))
+        self.screen.blit(power_text, power_rect)
         
         # Door uses indicator
         left_color = (255, 50, 50) if self.office.door_left_uses == 0 else (100, 200, 255)
@@ -866,10 +1333,12 @@ class Game:
         door_text = self.font_small.render(f"L-DOOR: {self.office.door_left_uses}  R-DOOR: {self.office.door_right_uses}", True, (200, 200, 200))
         self.screen.blit(door_text, (30, self.game_state.height - 25))
 
-        # Time indicator with creepy styling
-        hour = self.game_state.hour if self.game_state.hour != 0 else 12
-        time_color = (255, 100, 100) if hour >= 5 else (100, 200, 255)
-        time_text = self.font_medium.render(f"{hour:02d}:00 AM", True, time_color)
+        # Time indicator with minute-by-minute display
+        hours_elapsed = self.game_state.minutes_elapsed // 60
+        display_hour = 12 if hours_elapsed == 0 else hours_elapsed
+        minute = self.game_state.minutes_elapsed % 60
+        time_color = (255, 100, 100) if hours_elapsed >= 5 else (100, 200, 255)
+        time_text = self.font_medium.render(f"{display_hour:02d}:{minute:02d} AM", True, time_color)
         time_rect = time_text.get_rect(topright=(self.game_state.width - 30, 20))
         
         # Time box
@@ -908,36 +1377,63 @@ class Game:
 
     def draw_menu(self):
         """Draw main menu"""
-        # Animated gradient background
-        time_offset = time.time() * 0.5
-        for y in range(self.game_state.height):
-            ratio = y / self.game_state.height
-            wave = math.sin(time_offset + ratio * 3) * 0.1
-            r = int(10 + 35 * ratio + wave * 20)
-            g = int(10 + 15 * ratio)
-            b = int(50 + 25 * ratio + wave * 10)
-            pygame.draw.line(self.screen, (r, g, b), (0, y), (self.game_state.width, y))
+        # Draw background image if available, otherwise use gradient
+        bg_img = self.assets.get_image("menu_background")
+        if bg_img:
+            scaled_bg = pygame.transform.scale(bg_img, (self.game_state.width, self.game_state.height))
+            self.screen.blit(scaled_bg, (0, 0))
+        else:
+            # Fallback to gradient if no background image
+            time_offset = time.time() * 0.5
+            color_shift = math.sin(time.time() * 0.5) * 30
+            for y in range(self.game_state.height):
+                ratio = y / self.game_state.height
+                wave = math.sin(time_offset + ratio * 3) * 0.1
+                r = int(self.clamp(10 + 35 * ratio + wave * 20 + color_shift * 0.3, 0, 255))
+                g = int(self.clamp(10 + 15 * ratio + color_shift * 0.1, 0, 255))
+                b = int(self.clamp(50 + 25 * ratio + wave * 10 + color_shift * 0.2, 0, 255))
+                pygame.draw.line(self.screen, (r, g, b), (0, y), (self.game_state.width, y))
 
         # Pulsing glow effect behind title
         pulse = math.sin(time.time() * 2) * 0.2 + 0.8
         glow_color = (int(100 * pulse), int(255 * pulse), int(255 * pulse))
         
-        # Glow shadow effect
-        shadow_color = (int(30 * pulse), int(80 * pulse), int(100 * pulse))
-        shadow = self.font_title.render("FIVE NIGHTS", True, shadow_color)
-        shadow2 = self.font_title.render("AT MR INGLES'S", True, shadow_color)
-        shadow_rect = shadow.get_rect(center=(self.game_state.width // 2 + 3, int(self.game_state.height * 0.15) + 3))
-        shadow_rect2 = shadow2.get_rect(center=(self.game_state.width // 2 + 3, int(self.game_state.height * 0.25) + 3))
-        self.screen.blit(shadow, shadow_rect)
-        self.screen.blit(shadow2, shadow_rect2)
+        # Title image (fallback to text if missing)
+        title_img = self.assets.get_image("title")
+        if title_img:
+            # pulsing scale animation for title
+            pulse_scale = math.sin(time.time() * 1.5) * 0.08 + 1.0
+            target_w = int(self.game_state.width * 1.0 * pulse_scale)
+            scale = target_w / title_img.get_width()
+            target_h = int(title_img.get_height() * scale)
+            # allow massive height (up to 60% of screen)
+            max_h = int(self.game_state.height * 0.60)
+            if target_h > max_h:
+                scale = max_h / title_img.get_height()
+                target_h = int(title_img.get_height() * scale)
+                target_w = int(title_img.get_width() * scale)
+            scaled = pygame.transform.smoothscale(title_img, (target_w, target_h))
+            rect = scaled.get_rect(center=(self.game_state.width // 2, int(self.game_state.height * 0.25)))
+            # glowing aura behind title
+            glow_alpha = int(100 * (math.sin(time.time() * 2) * 0.3 + 0.5))
+            self.screen.blit(scaled, rect)
+        else:
+            # Glow shadow effect
+            shadow_color = (int(30 * pulse), int(80 * pulse), int(100 * pulse))
+            shadow = self.font_title.render("FIVE NIGHTS", True, shadow_color)
+            shadow2 = self.font_title.render("AT MR INGLES'S", True, shadow_color)
+            shadow_rect = shadow.get_rect(center=(self.game_state.width // 2 + 3, int(self.game_state.height * 0.15) + 3))
+            shadow_rect2 = shadow2.get_rect(center=(self.game_state.width // 2 + 3, int(self.game_state.height * 0.25) + 3))
+            self.screen.blit(shadow, shadow_rect)
+            self.screen.blit(shadow2, shadow_rect2)
 
-        # Title with glow
-        title = self.font_title.render("FIVE NIGHTS", True, glow_color)
-        title2 = self.font_title.render("AT MR INGLES'S", True, glow_color)
-        title_rect = title.get_rect(center=(self.game_state.width // 2, int(self.game_state.height * 0.15)))
-        title2_rect = title2.get_rect(center=(self.game_state.width // 2, int(self.game_state.height * 0.25)))
-        self.screen.blit(title, title_rect)
-        self.screen.blit(title2, title2_rect)
+            # Title with glow
+            title = self.font_title.render("FIVE NIGHTS", True, glow_color)
+            title2 = self.font_title.render("AT MR INGLES'S", True, glow_color)
+            title_rect = title.get_rect(center=(self.game_state.width // 2, int(self.game_state.height * 0.15)))
+            title2_rect = title2.get_rect(center=(self.game_state.width // 2, int(self.game_state.height * 0.25)))
+            self.screen.blit(title, title_rect)
+            self.screen.blit(title2, title2_rect)
 
         # Night selection buttons with animations
         button_width = 110
@@ -951,18 +1447,25 @@ class Game:
             is_available = night <= self.game_state.max_night_unlocked
             is_locked = night > self.game_state.max_night_unlocked
 
-            # Bobbing animation
+            # Bobbing animation with enhanced effects
             bob = math.sin(time.time() * 2 + night) * 5 if is_available else 0
             button_y_actual = button_y + bob
 
             # Button background with gradient
             if is_available:
-                button_color = (20, 150, 220)
-                border_color = (100, 255, 255)
+                # color pulse based on night
+                color_pulse = math.sin(time.time() * 2 + night * 0.5) * 30 + 20
+                button_color = (int(20 + color_pulse * 0.2), int(150 - color_pulse * 0.1), int(220 + color_pulse * 0.3))
+                border_color = (int(100 + color_pulse * 0.3), int(255), int(255))
                 text_color = (255, 255, 255)
-                # Glow effect
+                # Enhanced glow effect
+                glow_intensity = int(150 + math.sin(time.time() * 3 + night) * 50)
                 glow_rect = pygame.Rect(button_x - 5, button_y_actual - 5, button_width + 10, button_height + 10)
-                pygame.draw.rect(self.screen, (20, 100, 150), glow_rect, 1)
+                glow_surface = pygame.Surface((button_width + 10, button_height + 10))
+                glow_surface.set_alpha(glow_intensity // 3)
+                glow_surface.fill((100, 200, 255))
+                self.screen.blit(glow_surface, glow_rect)
+                pygame.draw.rect(self.screen, (int(20 + color_pulse * 0.5), int(100 + color_pulse * 0.2), int(150 + color_pulse * 0.3)), glow_rect, 2)
             else:
                 button_color = (40, 40, 80)
                 border_color = (70, 70, 120)
@@ -991,7 +1494,7 @@ class Game:
         inst_rect = inst_text.get_rect(center=(self.game_state.width // 2, int(self.game_state.height * 0.70)))
         self.screen.blit(inst_text, inst_rect)
 
-        # Survival record with styling
+        # Survival record with styling and glow
         if self.game_state.max_night_unlocked == 1:
             record_text = "No nights survived yet"
             record_color = (255, 100, 100)
@@ -999,13 +1502,21 @@ class Game:
             record_text = f"Your Record: Night {self.game_state.max_night_unlocked}"
             record_color = (100, 255, 150)
         
-        record = self.font_medium.render(record_text, True, record_color)
-        record_rect = record.get_rect(center=(self.game_state.width // 2, int(self.game_state.height * 0.80)))
-        # Record box
-        pygame.draw.rect(self.screen, (20, 20, 40), (record_rect.x - 20, record_rect.y - 10,
-                         record_rect.width + 40, record_rect.height + 20), 0)
-        pygame.draw.rect(self.screen, record_color, (record_rect.x - 20, record_rect.y - 10,
-                         record_rect.width + 40, record_rect.height + 20), 2)
+        # record pulsing effect
+        record_pulse = math.sin(time.time() * 2) * 0.2 + 0.8
+        pulsed_color = (int(record_color[0] * record_pulse), int(record_color[1] * record_pulse), int(record_color[2] * record_pulse))
+        
+        record = self.font_medium.render(record_text, True, pulsed_color)
+        record_rect = record.get_rect(center=(self.game_state.width // 2, int(self.game_state.height * 0.75)))
+        # Record box with glow
+        box_alpha = int(200 + math.sin(time.time() * 2) * 50)
+        box_surface = pygame.Surface((record_rect.width + 40, record_rect.height + 20))
+        box_surface.set_alpha(box_alpha // 2)
+        box_surface.fill((20, 20, 40))
+        box_rect = box_surface.get_rect(center=(record_rect.centerx, record_rect.centery))
+        self.screen.blit(box_surface, box_rect)
+        pygame.draw.rect(self.screen, pulsed_color, (box_rect.x, box_rect.y,
+                         box_rect.width, box_rect.height), 3)
         self.screen.blit(record, record_rect)
 
         # Key hint
@@ -1013,6 +1524,35 @@ class Game:
         hint_rect = hint_text.get_rect(center=(self.game_state.width // 2, int(self.game_state.height * 0.92)))
         self.screen.blit(hint_text, hint_rect)
         
+        # Night length slider
+        slider_width = 420
+        slider_height = 8
+        slider_x = (self.game_state.width - slider_width) // 2
+        slider_y = int(self.game_state.height * 0.86)
+        # Track
+        pygame.draw.rect(self.screen, (60, 60, 90), (slider_x, slider_y, slider_width, slider_height))
+        # Fill based on current value
+        val = self.clamp(self.game_state.seconds_per_hour, self.slider_min, self.slider_max)
+        t = (val - self.slider_min) / (self.slider_max - self.slider_min)
+        fill_w = int(slider_width * t)
+        pygame.draw.rect(self.screen, (20, 150, 220), (slider_x, slider_y, fill_w, slider_height))
+        # Knob
+        knob_x = slider_x + fill_w
+        knob_rect = pygame.Rect(knob_x - 8, slider_y - 6, 16, 20)
+        pygame.draw.rect(self.screen, (200, 200, 255), knob_rect)
+
+        # Slider label and value
+        night_seconds = int(self.game_state.seconds_per_hour)
+        minutes_total = int((self.game_state.seconds_per_hour * 6) / 60)
+        label = self.font_small.render(f"Night Length: {night_seconds}s/hour  (~{minutes_total} min/night)", True, (200, 255, 200))
+        label_rect = label.get_rect(center=(self.game_state.width // 2, slider_y - 18))
+        self.screen.blit(label, label_rect)
+
+        # Slider hint
+        slider_hint = self.font_small.render("Drag slider or use ← / → to adjust", True, (150, 180, 200))
+        hint_rect2 = slider_hint.get_rect(center=(self.game_state.width // 2, slider_y + 30))
+        self.screen.blit(slider_hint, hint_rect2)
+
         # Subtle static for creepy vibe
         self.apply_creepy_static(0.05)
 
@@ -1099,6 +1639,14 @@ class Game:
         """Main draw loop"""
         if self.game_state.state == "menu":
             self.draw_menu()
+            return
+
+        if self.game_state.state == "intro":
+            self.draw_intro()
+            return
+
+        if self.game_state.state == "tutorial":
+            self.draw_tutorial()
             return
 
         if self.game_state.state == "jumpscare":
@@ -1196,7 +1744,20 @@ class Game:
             if event.type == pygame.QUIT:
                 self.running = False
             elif event.type == pygame.MOUSEBUTTONDOWN:
-                # Handle minimap clicks
+                # Menu slider handling
+                if self.game_state.state == "menu":
+                    mx, my = event.pos
+                    slider_width = 420
+                    slider_x = (self.game_state.width - slider_width) // 2
+                    slider_y = int(self.game_state.height * 0.86)
+                    if slider_x <= mx <= slider_x + slider_width and slider_y - 12 <= my <= slider_y + 24:
+                        # start dragging and update value
+                        self.dragging_slider = True
+                        t = (mx - slider_x) / slider_width
+                        self.game_state.seconds_per_hour = self.clamp(self.slider_min + t * (self.slider_max - self.slider_min), self.slider_min, self.slider_max)
+                        continue
+
+                # Handle minimap clicks when playing
                 if self.game_state.state == "playing":
                     clicked_room = self.get_clicked_room(event.pos)
                     if clicked_room:
@@ -1210,6 +1771,17 @@ class Game:
                             self.switch_camera(cam_index)
                         except ValueError:
                             pass
+            elif event.type == pygame.MOUSEBUTTONUP:
+                # stop dragging slider
+                if self.dragging_slider:
+                    self.dragging_slider = False
+            elif event.type == pygame.MOUSEMOTION:
+                if self.dragging_slider and self.game_state.state == "menu":
+                    mx, my = event.pos
+                    slider_width = 420
+                    slider_x = (self.game_state.width - slider_width) // 2
+                    t = (mx - slider_x) / slider_width
+                    self.game_state.seconds_per_hour = self.clamp(self.slider_min + t * (self.slider_max - self.slider_min), self.slider_min, self.slider_max)
             elif event.type == pygame.KEYDOWN:
                 key = pygame.key.name(event.key)
 
@@ -1227,6 +1799,13 @@ class Game:
                         self.start_night(4)
                     elif key == "5" and self.game_state.max_night_unlocked >= 5:
                         self.start_night(5)
+                    elif key == "left":
+                        # decrease night length
+                        step = 5.0
+                        self.game_state.seconds_per_hour = self.clamp(self.game_state.seconds_per_hour - step, self.slider_min, self.slider_max)
+                    elif key == "right":
+                        step = 5.0
+                        self.game_state.seconds_per_hour = self.clamp(self.game_state.seconds_per_hour + step, self.slider_min, self.slider_max)
 
                 elif self.game_state.state == "playing":
                     if key == "q":
@@ -1261,6 +1840,18 @@ class Game:
                         self.start_night(1)
                     elif key == "m":
                         self.restart_from_menu()
+
+                elif self.game_state.state == "tutorial":
+                    if key == "space":
+                        # Skip tutorial - go directly to playing
+                        ambience_key = f"ambience_n{self.game_state.night}"
+                        self.assets.play_music(ambience_key)
+                        self.game_state.state = "playing"
+                        self.game_state.start_time = time.time()
+                        self.game_state.hour_timer = 0
+                        self.game_state.minutes_elapsed = 0
+                        self.tutorial_index = 0
+                        self.tutorial_timer = 0.0
 
     # =====================================================
     # MAIN LOOP

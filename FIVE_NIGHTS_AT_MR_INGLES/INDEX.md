@@ -12,9 +12,13 @@ This project contains a complete rewrite of the original LOVE2D game, converting
 - **[QUICKSTART.md](QUICKSTART.md)** - Quick setup & play guide ⭐ **START HERE**
 - **[README_PYTHON.md](README_PYTHON.md)** - Full user documentation
 
+### Latest Updates
+- **[CHANGELOG.md](CHANGELOG.md)** - Latest changes and feature updates 🆕
+- **[AI_FEATURES.md](AI_FEATURES.md)** - Advanced AI system documentation
+
 ### Technical Details
 - **[CONVERSION_REPORT.md](CONVERSION_REPORT.md)** - Detailed conversion analysis
-- **[main.py](main.py)** - The complete game source code (907 lines)
+- **[main.py](main.py)** - The complete game source code (~1,712 lines)
 
 ### Original Files
 - **[main.lua](main.lua)** - Original LOVE2D source (for reference)
@@ -74,8 +78,9 @@ Alternatively, use the launchers `run.bat` (Windows) or `run.sh` (Unix) which pe
 ✅ Win/lose conditions  
 
 ### Code Quality
-✅ Object-oriented design (8 classes)  
-✅ 766 lines of clean Python code  
+✅ Object-oriented design (9 classes)  
+✅ 1,712 lines of advanced Python code  
+✅ Cutting-edge AI system with learning  
 ✅ Well-documented and commented  
 ✅ PEP 8 compliant  
 ✅ Ready for extension/modification  

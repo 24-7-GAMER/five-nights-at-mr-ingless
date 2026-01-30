@@ -1,5 +1,34 @@
 # Changelog - Five Nights at Mr Ingles's (Python Edition)
 
+## Recent Updates (January 30, 2026)
+
+### Deterministic Difficulty Overhaul
+- Removed all randomness from AI and visual noise to make behavior fully predictable and skill-based
+- Rebuilt animatronic logic with fixed patrol routes, deterministic moods, and timed hunting phases
+- Side-based attacks: each animatronic now commits to a door side (or vent) and pressures it consistently
+- Hallway pressure forces entry when a door is open; closed doors take integrity damage over time
+- Attack windup ensures consistent, fair timing while still punishing slow reactions
+
+### New Difficulty Systems and Mechanics
+- Added difficulty slider (0.8x-2.0x) on the menu with Easy/Normal/Hard/Brutal/Nightmare labels
+- Difficulty scales AI speed, power drain, door wear, hallway pressure, and attack windup
+- Difficulty setting persists to the save file and loads on startup
+- Added camera heat and overload cooldown when cameras are used too long
+- Added deterministic power surges at fixed times (:15, :30, :45 each hour)
+
+### Door Integrity and Jam System
+- Replaced limited door uses with integrity and jam timers
+- Doors wear down while closed and under pressure; they can jam open if overused
+- HUD now shows door integrity and jam timers
+
+### Bug Fixes
+- Fixed Vent Crawler attacking through closed doors
+
+### UI
+- Added intro splash screen with full-screen fade in/out before the main menu
+
+---
+
 ## Recent Updates (January 29, 2026)
 
 ### 🧠 Advanced AI System Implementation
@@ -98,21 +127,23 @@
 
 ## Known Features
 
-✅ 5 Nights with increasing difficulty  
-✅ Power Management with drain system  
-✅ Limited Door Uses (3 per door, restored on block)  
-✅ Advanced Animatronic AI with learning  
-✅ Office & 6-camera switching system  
-✅ Interactive Minimap  
-✅ Time system (12 AM - 6 AM)  
-✅ Save/Progress system  
-✅ Full audio with night ambience  
-✅ Jumpscare events  
-✅ Win/Lose game states  
-✅ Atmospheric effects (scanlines, static, flickering)  
-✅ Configurable night length via slider  
-✅ Title screen with animations  
-✅ Night 1 intro sequence  
+??? 5 Nights with increasing difficulty  
+??? Power Management with drain system  
+??? Door Integrity + Jam system  
+??? Advanced Animatronic AI with deterministic behavior  
+??? Office & 6-camera switching system  
+??? Interactive Minimap  
+??? Time system (12 AM - 6 AM)  
+??? Save/Progress system  
+??? Full audio with night ambience  
+??? Jumpscare events  
+??? Win/Lose game states  
+??? Atmospheric effects (scanlines, static, flickering)  
+??? Configurable night length via slider  
+??? Difficulty slider with persistent save  
+??? Intro splash screen (fade in/out, unskippable)  
+??? Title screen with animations  
+??? Night 1 intro sequence  
 
 ---
 
@@ -130,9 +161,9 @@
 
 ## Development Notes
 
-**Last Updated**: January 29, 2026  
+**Last Updated**: January 30, 2026  
 **Python Version**: 3.7+  
 **Pygame Version**: 2.1.0+  
-**Total Lines of Code**: ~1,712 (main.py)
+**Total Lines of Code**: ~1,900 (main.py)
 
 For technical implementation details, see [AI_FEATURES.md](AI_FEATURES.md) and [CONVERSION_REPORT.md](CONVERSION_REPORT.md).

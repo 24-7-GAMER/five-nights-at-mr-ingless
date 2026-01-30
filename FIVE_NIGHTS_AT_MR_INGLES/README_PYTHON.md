@@ -10,22 +10,26 @@ This is a complete rewrite of the LOVE2D Lua game into Python using **Pygame**.
 
 ## Game Features (All Intact)
 
-✅ **5 Nights** with increasing difficulty  
-✅ **Power Management** - drain system with door/light/camera usage  
-✅ **Limited Door Uses** - 3 uses per door, restored when blocking attacks
-✅ **Advanced Animatronics AI** - 4 animatronics with cutting-edge learning & coordination  
-✅ **Mood System** - animatronics have dynamic emotional states that affect behavior  
-✅ **Adaptive Learning** - animatronics learn from player patterns and adjust strategy  
-✅ **Hunting Mode** - coordinated pursuits with pathfinding and pack tactics  
-✅ **Office & Camera Systems** - switch between office view and 6 camera feeds  
-✅ **Door & Light Controls** - manage power-draining systems  
-✅ **Interactive Minimap** - clickable camera map with animatronic tracking
-✅ **Time System** - survive from 12 AM to 6 AM (configurable night length)  
-✅ **Save System** - progress unlocks saved to JSON  
-✅ **Sound & Music** - full audio support with ambience per night  
-✅ **Jumpscare Events** - animatronics attack when doors are breached  
-✅ **Win/Lose States** - complete game flow  
-✅ **Creepy Atmosphere** - static effects, flickering lights, screen shake  
+??? **5 Nights** with increasing difficulty  
+??? **Power Management** - drain system with door/light/camera usage  
+??? **Door Integrity + Jam** - doors wear down and can jam open  
+??? **Deterministic Animatronics AI** - fixed patrols, side attacks, and hunting phases  
+??? **Mood System** - animatronics have dynamic emotional states that affect behavior  
+??? **Adaptive Learning** - animatronics learn from player patterns and adjust strategy  
+??? **Hunting Mode** - coordinated pursuits with pathfinding and pack tactics  
+??? **Office & Camera Systems** - switch between office view and 6 camera feeds  
+??? **Camera Heat** - cameras can overheat and lock out temporarily  
+??? **Door & Light Controls** - manage power-draining systems  
+??? **Interactive Minimap** - clickable camera map with animatronic tracking  
+??? **Time System** - survive from 12 AM to 6 AM (configurable night length)  
+??? **Difficulty Slider** - scales AI speed, power drain, and door wear  
+??? **Save System** - progress unlocks saved to JSON  
+??? **Sound & Music** - full audio support with ambience per night  
+??? **Jumpscare Events** - animatronics attack when doors are breached  
+??? **Win/Lose States** - complete game flow  
+??? **Creepy Atmosphere** - static effects, flickering lights, screen shake  
+??? **Splash Screen** - intro image with fade in/out on launch (unskippable)  
+
 
 ## Installation
 
@@ -59,14 +63,15 @@ Both scripts are optional; you can run `python main.py` directly.
 | Key | Action |
 |-----|--------|
 | **1-5** | Start Night (menu), Switch Camera (gameplay) |
-| **Q** | Toggle Left Door (3 uses max) |
-| **E** | Toggle Right Door (3 uses max) |
+| **Q** | Toggle Left Door |
+| **E** | Toggle Right Door |
 | **F** | Toggle Light/Flashlight |
 | **TAB** | Toggle Camera View |
 | **6** | Switch to Vent Camera |
 | **CLICK** | Click minimap to switch cameras |
 | **R** | Restart to Night 1 |
 | **M** | Return to Menu |
+| **A/D** | Adjust Difficulty (menu) |
 | **ESC** | Quit Game |
 
 ## Architecture
@@ -140,7 +145,8 @@ assets/
 Progress is saved to `mr_ingles_save.json` with structure:
 ```json
 {
-  "max_night": 5
+  "max_night": 5,
+  "difficulty": 1.2
 }
 ```
 
@@ -149,20 +155,20 @@ Progress is saved to `mr_ingles_save.json` with structure:
 Potential additions now that we're in Python:
 - Modern graphics enhancements
 - Additional animatronics
-- Custom difficulty settings
+- Custom difficulty presets
 - Modding support
 - Analytics/statistics tracking
 - Mobile port (Kivy)
 
 ## Latest Updates
 
-**January 29, 2026**: 
+**January 30, 2026**: 
 - ✨ Implemented advanced AI system with mood, learning, and coordination
 - 💡 Increased flashlight brightness for better visibility
 - 📋 See [CHANGELOG.md](CHANGELOG.md) for complete update history
 
 ---
 
-**Last Updated**: January 29, 2026  
+**Last Updated**: January 30, 2026  
 **Engine**: Pygame 2.1.0+  
 **Python**: 3.7+

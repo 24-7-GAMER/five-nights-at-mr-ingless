@@ -8,7 +8,7 @@
 
 | Item | Original | New | Status |
 |------|----------|-----|--------|
-| **Main Game File** | main.lua (864 lines) | main.py (1,712 lines) | ✅ Complete + Enhanced |
+| **Main Game File** | main.lua (864 lines) | main.py (1,800+ lines) | ✅ Complete + Enhanced |
 | **Engine** | LOVE2D | Pygame 2.1.0+ | ✅ Modern |
 | **Game Mechanics** | 100% intact | 100% preserved + AI enhancements | ✅ Enhanced |
 | **Assets** | Reused directly | Same file structure | ✅ Compatible |
@@ -36,19 +36,22 @@
 ## Game Features: 100% Implemented
 
 ### Core Mechanics
-- ✅ 5 Night progression system
-- ✅ Power management with drain mechanics
-- ✅ **Limited door uses system** (3 uses per door)
-- ✅ **Door use restoration** (blocks restore uses when doors stop attacks)
-- ✅ 4 animatronics with AI pathfinding
-- ✅ 7-room environment with navigation graph
-- ✅ Office + 6 camera feed system
-- ✅ Door controls (left/right)
-- ✅ Light toggle
-- ✅ Power outage events
-- ✅ Jumpscare attacks
-- ✅ Win condition (6 AM survival)
-- ✅ Game over state
+- ??? 5 Night progression system
+- ??? Power management with drain mechanics
+- ??? Door integrity + jam system (wear, jam timers)
+- ??? 4 animatronics with deterministic AI
+- ??? 7-room environment with navigation graph
+- ??? Office + 6 camera feed system
+- ??? Camera heat/overload system
+- ??? Door controls (left/right)
+- ??? Light toggle
+- ??? Power outage events
+- ??? Difficulty slider (saved)
+- ??? Jumpscare attacks
+- ??? Win condition (6 AM survival)
+- ??? Game over state
+- ??? Intro splash screen (fade in/out, unskippable)
+
 
 ### Audio System
 - ✅ 5 SFX effects (door, light, jumpscare, bell)
@@ -186,6 +189,7 @@ python main.py
 - **6**: Vent camera
 - **R**: Restart
 - **M**: Menu
+- **A/D**: Adjust difficulty (menu)
 - **ESC**: Quit
 
 ---
@@ -287,7 +291,7 @@ Now that the game is in Python, possibilities include:
 ### Immediate
 - [ ] Add unit tests
 - [ ] Implement logging system
-- [ ] Add difficulty settings
+- [x] Add difficulty settings (slider)
 - [ ] Configuration file support
 
 ### Medium-term
@@ -357,7 +361,7 @@ All original game mechanics are intact and fully functional. The Python version 
 
 ---
 
-**Conversion Date**: January 28, 2026  
+**Conversion Date**: January 30, 2026  
 **Original Engine**: LOVE2D (Lua)  
 **New Engine**: Pygame (Python)  
 **Status**: ✅ Complete & Tested

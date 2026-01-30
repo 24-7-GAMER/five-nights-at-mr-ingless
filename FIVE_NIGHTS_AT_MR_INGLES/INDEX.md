@@ -18,7 +18,7 @@ This project contains a complete rewrite of the original LOVE2D game, converting
 
 ### Technical Details
 - **[CONVERSION_REPORT.md](CONVERSION_REPORT.md)** - Detailed conversion analysis
-- **[main.py](main.py)** - The complete game source code (~1,712 lines)
+- **[main.py](main.py)** - The complete game source code
 
 ### Original Files
 - **[main.lua](main.lua)** - Original LOVE2D source (for reference)
@@ -117,6 +117,7 @@ Alternatively, use the launchers `run.bat` (Windows) or `run.sh` (Unix) which pe
 | **Switch Camera** | 1-6 |
 | **Restart** | R |
 | **Menu** | M |
+| **Difficulty (menu)** | A/D |
 | **Quit** | ESC |
 
 ---
@@ -262,6 +263,6 @@ Enjoy the game! 🎮
 
 ---
 
-**Last Updated**: January 28, 2026  
+**Last Updated**: January 30, 2026  
 **Version**: 1.0 (Python/Pygame)  
 **Status**: ✅ Complete & Ready

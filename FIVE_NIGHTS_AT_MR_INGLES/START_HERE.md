@@ -37,13 +37,16 @@ Your **Five Nights at Mr Ingles's** game has been **completely rewritten** from 
 - [x] 5 nights with difficulty progression
 - [x] Power management with real-time drain
 - [x] Time system (12 AM → 6 AM)
-- [x] 4 animatronics with AI pathfinding
+- [x] 4 animatronics with deterministic AI
 - [x] Door controls (left/right)
+- [x] Door integrity + jam system
 - [x] Light system
 - [x] 6 camera feeds
+- [x] Camera heat/overload system
 - [x] Jumpscare events
 - [x] Win/lose conditions
 - [x] Save/load progression
+- [x] Intro splash screen (fade in/out, unskippable)
 
 ### Visual Effects
 - [x] Smooth door animations
@@ -218,6 +221,7 @@ Five Nights Directory/
 | Switch Camera | 1-6 |
 | Restart | R |
 | Menu | M |
+| Difficulty (menu) | A/D |
 | Quit | ESC |
 
 ---
@@ -409,7 +413,7 @@ python main.py
 ---
 
 **Status**: ✅ **COMPLETE**  
-**Date**: January 28, 2026  
+**Date**: January 30, 2026  
 **Version**: 1.0 (Python/Pygame)  
 **Quality**: Production-Ready  
 **Next Action**: Run `python main.py`  

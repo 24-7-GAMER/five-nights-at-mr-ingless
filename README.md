@@ -1,4 +1,4 @@
-![FNAMI banner](assets/img/title.png)
+![FNAMI banner](FIVE_NIGHTS_AT_MR_INGLES/assets/img/title.png)
 
 # ✅ CONVERSION COMPLETE: Lua → Python
 

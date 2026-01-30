@@ -43,6 +43,14 @@ This is a complete rewrite of the LOVE2D Lua game into Python using **Pygame**.
 pip install -r requirements.txt
 ```
 
+### macOS Notes (If Pygame Fails)
+If Pygame fails to install when running `main.py`, try the manual install steps below in Terminal:
+```bash
+python3 -m pip install --upgrade pip
+python3 -m pip install -r requirements.txt
+```
+If you have multiple Pythons installed, make sure `python3` and `pip` are the same install by always using `python3 -m pip`.
+
 ## Running
 
 ```bash
@@ -57,6 +65,11 @@ There are convenience scripts included to start the game:
 - `run.sh` — Unix/Linux/Mac launcher. Checks for `python3`, ensures dependencies, then runs `python3 main.py`.
 
 Both scripts are optional; you can run `python main.py` directly.
+On macOS, double‑clicking `run.sh` may open it in Xcode because it is a shell script. Run it from Terminal instead:
+```bash
+chmod +x run.sh
+./run.sh
+```
 
 ## Controls
 

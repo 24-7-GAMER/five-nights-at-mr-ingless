@@ -27,6 +27,9 @@
 ### UI
 - Added intro splash screen with full-screen fade in/out before the main menu
 
+### Documentation
+- Added macOS guidance for running `run.sh` from Terminal and troubleshooting Pygame installs
+
 ---
 
 ## Recent Updates (January 29, 2026)

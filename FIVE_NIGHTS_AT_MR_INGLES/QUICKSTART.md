@@ -181,6 +181,14 @@ Note: `run.bat` (Windows) and `run.sh` (Unix) are convenience launchers. They ch
 python main.py
 ```
 
+### macOS Troubleshooting (Pygame Install)
+If running `main.py` fails because Pygame cannot be installed, use Terminal and run:
+```bash
+python3 -m pip install --upgrade pip
+python3 -m pip install -r requirements.txt
+```
+Tip: Use `python3 -m pip` to avoid mismatched Python/pip versions.
+
 ### Controls (Same as Original)
 - **1-5**: Start night / Switch camera
 - **Q/E**: Left/Right doors

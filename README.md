@@ -1,3 +1,5 @@
+![FNAMI banner](assets/img/title.png)
+
 # ✅ CONVERSION COMPLETE: Lua → Python
 
 ## Project Summary

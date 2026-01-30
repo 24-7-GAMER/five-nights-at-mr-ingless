@@ -29,6 +29,7 @@
 
 ### Documentation
 - Added macOS guidance for running `run.sh` from Terminal and troubleshooting Pygame installs
+- Added SDL.h/Xcode Command Line Tools notes for macOS build failures
 
 ---
 

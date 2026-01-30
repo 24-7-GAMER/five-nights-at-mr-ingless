@@ -50,6 +50,11 @@ python3 -m pip install --upgrade pip
 python3 -m pip install -r requirements.txt
 ```
 If you have multiple Pythons installed, make sure `python3` and `pip` are the same install by always using `python3 -m pip`.
+If you see `fatal error: 'SDL.h' file not found`, install Xcode Command Line Tools and SDL2:
+```bash
+xcode-select --install
+brew install sdl2 sdl2_image sdl2_mixer sdl2_ttf
+```
 
 ## Running
 

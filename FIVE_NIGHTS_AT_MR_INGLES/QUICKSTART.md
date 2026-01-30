@@ -189,6 +189,12 @@ python3 -m pip install -r requirements.txt
 ```
 Tip: Use `python3 -m pip` to avoid mismatched Python/pip versions.
 
+If you see `fatal error: 'SDL.h' file not found`, install Xcode Command Line Tools and SDL2:
+```bash
+xcode-select --install
+brew install sdl2 sdl2_image sdl2_mixer sdl2_ttf
+```
+
 ### Controls (Same as Original)
 - **1-5**: Start night / Switch camera
 - **Q/E**: Left/Right doors

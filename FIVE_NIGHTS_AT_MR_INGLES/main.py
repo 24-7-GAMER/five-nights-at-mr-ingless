@@ -239,6 +239,9 @@ class Animatronic:
         self.last_blocked_time = 0
         self.block_count = 0
         self.retreat_timer = 0.0
+        self.retreat_target = None
+        self.last_room = start_room
+        self.hallway_block_timer = 0.0
 
     def update(self, dt, game_state=None, difficulty=1.0):
         """Update animatronic with deterministic AI"""
@@ -321,6 +324,7 @@ class Animatronic:
         self.patrol_index = (self.patrol_index + 1) % len(self.patrol_route)
         next_room = self.patrol_route[self.patrol_index]
         if next_room != self.room:
+            self.last_room = self.room
             self.room = next_room
             self.target_x, self.target_y = room_position(self.room, WINDOW_WIDTH, WINDOW_HEIGHT)
 
@@ -344,6 +348,7 @@ class Animatronic:
                     best_room = neighbor
         
         if best_room != self.room:
+            self.last_room = self.room
             self.room = best_room
             self.target_x, self.target_y = room_position(self.room, WINDOW_WIDTH, WINDOW_HEIGHT)
 
@@ -401,12 +406,17 @@ class Animatronic:
         if self.room == "Office":
             neighbors = get_neighbors(self.room)
             if neighbors:
-                # Pick a deterministic neighbor, don't stay in office
-                self.room = neighbors[self.block_count % len(neighbors)]
+                # Pick a deterministic neighbor, avoid immediate hallway if possible
+                retreat_candidates = [r for r in neighbors if r != "Hallway"]
+                if not retreat_candidates:
+                    retreat_candidates = neighbors
+                self.last_room = self.room
+                self.room = retreat_candidates[self.block_count % len(retreat_candidates)]
                 self.target_x, self.target_y = room_position(self.room, 1280, 720)
                 self.x = self.target_x
                 self.y = self.target_y
                 self.retreat_timer = 4.0
+                self.retreat_target = self.room
         # Record this memory for future behavior
         self.player_action_memory.append({"action": "blocked", "side": side, "time": time.time()})
 
@@ -1136,6 +1146,7 @@ class Game:
 
                 if door_closed:
                     anim.hallway_timer = 0.0
+                    anim.hallway_block_timer += dt
                     pressure = 3.2 * self.difficulty
                     if anim.attack_side in ("left", "vent"):
                         self.office.door_left_health = max(0.0, self.office.door_left_health - pressure * dt)
@@ -1145,8 +1156,21 @@ class Game:
                         self.office.door_right_health = max(0.0, self.office.door_right_health - pressure * dt)
                         if self.office.door_right_health <= 0 and self.office.door_right_jam_timer <= 0:
                             self.break_door("right")
+                    # If blocked too long in hallway, force a retreat
+                    if anim.hallway_block_timer >= 2.5:
+                        neighbors = [r for r in get_neighbors("Hallway") if r != "Office"]
+                        if neighbors:
+                            anim.last_room = anim.room
+                            anim.room = neighbors[anim.block_count % len(neighbors)]
+                            anim.target_x, anim.target_y = room_position(anim.room, WINDOW_WIDTH, WINDOW_HEIGHT)
+                            anim.x = anim.target_x
+                            anim.y = anim.target_y
+                            anim.retreat_timer = 4.0
+                            anim.retreat_target = anim.room
+                            anim.hallway_block_timer = 0.0
                 else:
                     anim.hallway_timer += dt
+                    anim.hallway_block_timer = 0.0
                     side = anim.attack_side
                     office_count = sum(1 for a in self.animatronics if a.room == "Office")
                     same_side_in_office = any(a.room == "Office" and a.attack_side == side for a in self.animatronics)
@@ -1167,6 +1191,7 @@ class Game:
                         self.log_event(f"{anim.name} entered Office")
             else:
                 anim.hallway_timer = 0.0
+                anim.hallway_block_timer = 0.0
 
             # Check if animatronic was blocked by a door
             anim.get_blocked_side(self.office)

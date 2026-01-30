@@ -50,6 +50,7 @@
 - ??? Power outage events
 - ??? Difficulty slider (saved)
 - ??? Run variability (per-run AI profiles)
+- ??? Retreat behavior (blocked anims back off)
 - ??? Jumpscare attacks
 - ??? Win condition (6 AM survival)
 - ??? Game over state

@@ -27,6 +27,7 @@ This is a complete rewrite of the LOVE2D Lua game into Python using **Pygame**.
 ??? **Difficulty Slider** - scales AI speed, power drain, and door wear  
 ??? **Run Variability** - per-run AI profiles keep behavior different each time  
 ??? **Retreat Cooldowns** - blocked animatronics back off briefly  
+??? **Hallway Retreats** - door blockers withdraw instead of camping  
 ??? **Save System** - progress unlocks saved to JSON  
 ??? **Sound & Music** - full audio support with ambience per night  
 ??? **Jumpscare Events** - animatronics attack when doors are breached  

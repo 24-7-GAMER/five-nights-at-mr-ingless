@@ -51,6 +51,7 @@ Your **Five Nights at Mr Ingles's** game has been **completely rewritten** from 
 - [x] Intro splash screen (fade in/out, unskippable)
 - [x] TOS splash screen (fade in/out, 3-4s hold)
 - [x] Pause menu + HUD expansion
+- [x] Retreat behavior (blocked anims back off)
 - [x] Jumpscare fly-in animation
 
 ### Visual Effects

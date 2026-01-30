@@ -6,6 +6,7 @@ Faithful port of the LOVE2D game to Python
 
 import sys
 import os
+os.chdir(os.path.dirname(os.path.abspath(__file__)))
 import subprocess
 
 def install_required_packages():

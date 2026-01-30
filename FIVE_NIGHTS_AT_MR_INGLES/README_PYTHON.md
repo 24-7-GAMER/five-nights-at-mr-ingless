@@ -13,7 +13,7 @@ This is a complete rewrite of the LOVE2D Lua game into Python using **Pygame**.
 ??? **5 Nights** with increasing difficulty  
 ??? **Power Management** - drain system with door/light/camera usage  
 ??? **Door Integrity + Jam** - doors wear down and can jam open  
-??? **Deterministic Animatronics AI** - fixed patrols, side attacks, and hunting phases  
+??? **Deterministic Animatronics AI** - fixed patrols, side attacks, staggered activation, and hunting phases  
 ??? **Mood System** - animatronics have dynamic emotional states that affect behavior  
 ??? **Adaptive Learning** - animatronics learn from player patterns and adjust strategy  
 ??? **Hunting Mode** - coordinated pursuits with pathfinding and pack tactics  
@@ -23,12 +23,16 @@ This is a complete rewrite of the LOVE2D Lua game into Python using **Pygame**.
 ??? **Interactive Minimap** - clickable camera map with animatronic tracking  
 ??? **Time System** - survive from 12 AM to 6 AM (configurable night length)  
 ??? **Difficulty Slider** - scales AI speed, power drain, and door wear  
+??? **Run Variability** - per-run AI profiles keep behavior different each time  
 ??? **Save System** - progress unlocks saved to JSON  
 ??? **Sound & Music** - full audio support with ambience per night  
 ??? **Jumpscare Events** - animatronics attack when doors are breached  
 ??? **Win/Lose States** - complete game flow  
 ??? **Creepy Atmosphere** - static effects, flickering lights, screen shake  
 ??? **Splash Screen** - intro image with fade in/out on launch (unskippable)  
+??? **TOS Splash** - second splash (tos_splash.png) with longer hold  
+??? **Pause Menu** - ESC/P to pause with resume/restart/menu/quit  
+??? **HUD Expansion** - threat meters, power breakdown, event log, night progress bar  
 
 
 ## Installation
@@ -89,7 +93,9 @@ chmod +x run.sh
 | **CLICK** | Click minimap to switch cameras |
 | **R** | Restart to Night 1 |
 | **M** | Return to Menu |
+| **P / ESC** | Pause (gameplay) |
 | **A/D** | Adjust Difficulty (menu) |
+| **H** | Toggle HUD Help |
 | **ESC** | Quit Game |
 
 ## Architecture

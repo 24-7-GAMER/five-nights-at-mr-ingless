@@ -47,6 +47,8 @@ Your **Five Nights at Mr Ingles's** game has been **completely rewritten** from 
 - [x] Win/lose conditions
 - [x] Save/load progression
 - [x] Intro splash screen (fade in/out, unskippable)
+- [x] TOS splash screen (fade in/out, 3-4s hold)
+- [x] Pause menu + HUD expansion
 
 ### Visual Effects
 - [x] Smooth door animations

@@ -8,6 +8,9 @@
 - Side-based attacks: each animatronic now commits to a door side (or vent) and pressures it consistently
 - Hallway pressure forces entry when a door is open; closed doors take integrity damage over time
 - Attack windup ensures consistent, fair timing while still punishing slow reactions
+- Staggered activation delays prevent instant dogpiles at the start of a night
+- Run-to-run variability via per-run AI profiles (no luck-based door breaches)
+- Entry cooldowns and office attacker caps prevent impossible dogpiles
 
 ### New Difficulty Systems and Mechanics
 - Added difficulty slider (0.8x-2.0x) on the menu with Easy/Normal/Hard/Brutal/Nightmare labels
@@ -20,12 +23,16 @@
 - Replaced limited door uses with integrity and jam timers
 - Doors wear down while closed and under pressure; they can jam open if overused
 - HUD now shows door integrity and jam timers
+- Jam timers now recover faster
 
 ### Bug Fixes
 - Fixed Vent Crawler attacking through closed doors
 
 ### UI
 - Added intro splash screen with full-screen fade in/out before the main menu
+- Added second TOS splash (tos_splash.png) with 3-4s hold and fade
+- Added pause menu (ESC/P) with resume, restart, menu, quit
+- Expanded HUD: threat meters, power usage breakdown, night progress bar, event log, and controls overlay
 
 ### Documentation
 - Added macOS guidance for running `run.sh` from Terminal and troubleshooting Pygame installs

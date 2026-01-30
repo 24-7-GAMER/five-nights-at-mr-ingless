@@ -47,10 +47,13 @@
 - ??? Light toggle
 - ??? Power outage events
 - ??? Difficulty slider (saved)
+- ??? Run variability (per-run AI profiles)
 - ??? Jumpscare attacks
 - ??? Win condition (6 AM survival)
 - ??? Game over state
 - ??? Intro splash screen (fade in/out, unskippable)
+- ??? TOS splash screen (fade in/out, 3-4s hold)
+- ??? Pause menu + HUD expansion
 
 
 ### Audio System

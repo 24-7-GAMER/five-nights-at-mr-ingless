@@ -68,3 +68,17 @@ This slider is saved to disk and loads on startup.
 - Power surges occur at fixed times (:15, :30, :45 each hour)
 
 For full gameplay changes and history, see CHANGELOG.md.
+
+## Run-to-Run Variability (Fair, Non-Luck-Based)
+Each new game run generates a deterministic profile using a per-run seed. This changes:
+- Patrol route rotations
+- Activation delays
+- Movement intervals and aggression ramps
+- Hallway entry timing
+
+Fairness constraints ensure runs are never impossible:
+- Side entry cooldowns prevent rapid back-to-back entries
+- Max simultaneous office attackers is capped
+- Door logic remains strict (closed doors always block correctly)
+
+This keeps every run different without random breach outcomes.

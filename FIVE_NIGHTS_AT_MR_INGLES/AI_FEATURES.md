@@ -82,3 +82,13 @@ Fairness constraints ensure runs are never impossible:
 - Door logic remains strict (closed doors always block correctly)
 
 This keeps every run different without random breach outcomes.
+
+## Real-Time Fairness Guard
+The AI recalculates defensive capacity every frame to prevent impossible states.
+It dynamically adjusts:
+- Maximum simultaneous office attackers
+- Entry cooldowns
+- Grace windows after door jams or camera overloads
+
+Inputs include power level, door integrity, jam timers, camera availability, and door openness.
+This keeps the game hard but always survivable with perfect play.

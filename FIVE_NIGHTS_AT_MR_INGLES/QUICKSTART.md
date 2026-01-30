@@ -39,6 +39,8 @@
 - ??? 5 Night progression system
 - ??? Power management with drain mechanics
 - ??? Door integrity + jam system (wear, jam timers)
+- ??? Open door limit (auto-close)
+- ??? Instant door recovery when open
 - ??? 4 animatronics with deterministic AI
 - ??? 7-room environment with navigation graph
 - ??? Office + 6 camera feed system
@@ -54,6 +56,7 @@
 - ??? Intro splash screen (fade in/out, unskippable)
 - ??? TOS splash screen (fade in/out, 3-4s hold)
 - ??? Pause menu + HUD expansion
+- ??? Jumpscare fly-in animation
 
 
 ### Audio System

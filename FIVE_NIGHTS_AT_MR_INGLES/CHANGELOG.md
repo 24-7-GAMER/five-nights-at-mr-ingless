@@ -11,6 +11,7 @@
 - Staggered activation delays prevent instant dogpiles at the start of a night
 - Run-to-run variability via per-run AI profiles (no luck-based door breaches)
 - Entry cooldowns and office attacker caps prevent impossible dogpiles
+- Real-time fairness caps adjust entry cooldowns and max attackers based on power, door health, jams, and camera status
 
 ### New Difficulty Systems and Mechanics
 - Added difficulty slider (0.8x-2.0x) on the menu with Easy/Normal/Hard/Brutal/Nightmare labels
@@ -24,6 +25,7 @@
 - Doors wear down while closed and under pressure; they can jam open if overused
 - HUD now shows door integrity and jam timers
 - Jam timers now recover faster
+- Doors now auto-close if left open too long (instant reset)
 
 ### Bug Fixes
 - Fixed Vent Crawler attacking through closed doors
@@ -33,6 +35,7 @@
 - Added second TOS splash (tos_splash.png) with 3-4s hold and fade
 - Added pause menu (ESC/P) with resume, restart, menu, quit
 - Expanded HUD: threat meters, power usage breakdown, night progress bar, event log, and controls overlay
+- Jumpscare now includes a fly-in animation before the red screen
 
 ### Documentation
 - Added macOS guidance for running `run.sh` from Terminal and troubleshooting Pygame installs

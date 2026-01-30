@@ -40,6 +40,8 @@ Your **Five Nights at Mr Ingles's** game has been **completely rewritten** from 
 - [x] 4 animatronics with deterministic AI
 - [x] Door controls (left/right)
 - [x] Door integrity + jam system
+- [x] Open door limit (auto-close)
+- [x] Instant door recovery when open
 - [x] Light system
 - [x] 6 camera feeds
 - [x] Camera heat/overload system
@@ -49,6 +51,7 @@ Your **Five Nights at Mr Ingles's** game has been **completely rewritten** from 
 - [x] Intro splash screen (fade in/out, unskippable)
 - [x] TOS splash screen (fade in/out, 3-4s hold)
 - [x] Pause menu + HUD expansion
+- [x] Jumpscare fly-in animation
 
 ### Visual Effects
 - [x] Smooth door animations

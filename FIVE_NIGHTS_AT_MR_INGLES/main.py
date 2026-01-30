@@ -100,6 +100,8 @@ class Office:
         self.door_right_health = 100.0
         self.door_left_jam_timer = 0.0
         self.door_right_jam_timer = 0.0
+        self.door_left_open_timer = 0.0
+        self.door_right_open_timer = 0.0
         self.cam_heat = 0.0
         self.cam_overload_timer = 0.0
 
@@ -116,6 +118,8 @@ class Office:
         self.door_right_health = 100.0
         self.door_left_jam_timer = 0.0
         self.door_right_jam_timer = 0.0
+        self.door_left_open_timer = 0.0
+        self.door_right_open_timer = 0.0
         self.cam_heat = 0.0
         self.cam_overload_timer = 0.0
 
@@ -141,10 +145,13 @@ class Jumpscare:
         self.timer = 0
         self.duration = 2.0
         self.killer = "Mr Ingles"
+        self.zoom = 0.0
+        self.fly_duration = 0.6
 
     def reset(self):
         self.active = False
         self.timer = 0
+        self.zoom = 0.0
 
 
 # =====================================================
@@ -231,6 +238,7 @@ class Animatronic:
         self.adaptive_aggro = base_aggro  # adjusts based on learning
         self.last_blocked_time = 0
         self.block_count = 0
+        self.retreat_timer = 0.0
 
     def update(self, dt, game_state=None, difficulty=1.0):
         """Update animatronic with deterministic AI"""
@@ -240,6 +248,10 @@ class Animatronic:
         # Staggered activation to avoid instant dogpiles
         minutes = game_state.minutes_elapsed if game_state else 0
         if minutes < self.start_delay_minutes:
+            return
+
+        if self.retreat_timer > 0:
+            self.retreat_timer = max(0.0, self.retreat_timer - dt)
             return
 
         if self.hunting_timer > 0:
@@ -394,6 +406,7 @@ class Animatronic:
                 self.target_x, self.target_y = room_position(self.room, 1280, 720)
                 self.x = self.target_x
                 self.y = self.target_y
+                self.retreat_timer = 4.0
         # Record this memory for future behavior
         self.player_action_memory.append({"action": "blocked", "side": side, "time": time.time()})
 
@@ -553,6 +566,9 @@ class Game:
         self.side_entry_cooldown = {"left": 0.0, "right": 0.0, "vent": 0.0}
         self.entry_cooldown_seconds = 6.0
         self.max_office_attackers = 2
+        self.jam_grace_timer = 0.0
+        self.overload_grace_timer = 0.0
+        self.door_open_limit = 7.0
         self.power_usage = {"base": 0.0, "doors": 0.0, "lights": 0.0, "cams": 0.0, "surge": 1.0}
         self.event_log = []
         self.event_log_max = 6
@@ -634,6 +650,7 @@ class Game:
             self.office.door_right_jam_timer = 4.5
             self.set_status("Right door jammed open!")
             self.log_event("Right door jammed")
+        self.jam_grace_timer = max(self.jam_grace_timer, 3.0)
     
     def apply_creepy_static(self, intensity=0.3):
         """Apply creepy static/noise overlay"""
@@ -901,10 +918,34 @@ class Game:
         if self.office.door_right_jam_timer > 0:
             self.office.door_right_jam_timer = max(0, self.office.door_right_jam_timer - dt * 1.5)
 
+        # Door open limit (auto-close if open too long; recovers immediately when closed)
+        if not self.office.door_left_closed:
+            self.office.door_left_open_timer += dt
+            if self.office.door_left_open_timer >= self.door_open_limit:
+                self.office.door_left_closed = True
+                self.office.door_left_open_timer = 0.0
+                self.log_event("Left door auto-closed (open limit)")
+        else:
+            self.office.door_left_open_timer = 0.0
+
+        if not self.office.door_right_closed:
+            self.office.door_right_open_timer += dt
+            if self.office.door_right_open_timer >= self.door_open_limit:
+                self.office.door_right_closed = True
+                self.office.door_right_open_timer = 0.0
+                self.log_event("Right door auto-closed (open limit)")
+        else:
+            self.office.door_right_open_timer = 0.0
+
         # Entry cooldown timers (fairness)
         for side in self.side_entry_cooldown:
             if self.side_entry_cooldown[side] > 0:
                 self.side_entry_cooldown[side] = max(0.0, self.side_entry_cooldown[side] - dt)
+
+        if self.jam_grace_timer > 0:
+            self.jam_grace_timer = max(0.0, self.jam_grace_timer - dt)
+        if self.overload_grace_timer > 0:
+            self.overload_grace_timer = max(0.0, self.overload_grace_timer - dt)
 
         # Door wear and passive recovery
         wear_rate = (1.2 * self.difficulty) * dt
@@ -912,16 +953,48 @@ class Game:
         if self.office.door_left_closed:
             self.office.door_left_health = max(0, self.office.door_left_health - wear_rate)
         else:
-            self.office.door_left_health = min(100.0, self.office.door_left_health + recover_rate)
+            self.office.door_left_health = 100.0
         if self.office.door_right_closed:
             self.office.door_right_health = max(0, self.office.door_right_health - wear_rate)
         else:
-            self.office.door_right_health = min(100.0, self.office.door_right_health + recover_rate)
+            self.office.door_right_health = 100.0
 
         if self.office.door_left_closed and self.office.door_left_health <= 0 and self.office.door_left_jam_timer <= 0:
             self.break_door("left")
         if self.office.door_right_closed and self.office.door_right_health <= 0 and self.office.door_right_jam_timer <= 0:
             self.break_door("right")
+
+        self.update_fairness_caps()
+
+    def update_fairness_caps(self):
+        """Compute real-time caps to prevent impossible states"""
+        doors_open = int(not self.office.door_left_closed) + int(not self.office.door_right_closed)
+        avg_health = (self.office.door_left_health + self.office.door_right_health) / 2.0
+        low_power = self.power.current < 20
+        cam_disabled = self.office.cam_overload_timer > 0 or self.power.outage
+        jam_active = self.office.door_left_jam_timer > 0 or self.office.door_right_jam_timer > 0
+
+        cap = 2
+        if doors_open >= 2:
+            cap = 1
+        if low_power or cam_disabled or avg_health < 30 or jam_active:
+            cap = 1
+        if self.jam_grace_timer > 0 or self.overload_grace_timer > 0:
+            cap = 1
+
+        self.max_office_attackers = cap
+
+        # Entry cooldown scales with defensive weakness
+        cooldown = 6.0
+        if low_power:
+            cooldown += 2.0
+        if cam_disabled:
+            cooldown += 1.5
+        if avg_health < 30:
+            cooldown += 2.0
+        if doors_open >= 2:
+            cooldown += 1.0
+        self.entry_cooldown_seconds = max(6.0, min(12.0, cooldown))
         
         # Screen shake decay
         if self.screen_shake > 0:
@@ -972,6 +1045,7 @@ class Game:
                 self.office.cam_flash = 1.0
                 self.set_status("CAMERAS OVERHEATED!")
                 self.log_event("Cameras overheated")
+                self.overload_grace_timer = max(self.overload_grace_timer, 3.0)
         else:
             self.office.cam_heat = max(0.0, self.office.cam_heat - 12.0 * dt)
 
@@ -1080,7 +1154,9 @@ class Game:
                         anim.hallway_timer >= anim.hallway_entry_delay and
                         self.side_entry_cooldown.get(side, 0.0) <= 0.0 and
                         not same_side_in_office and
-                        office_count < self.max_office_attackers
+                        office_count < self.max_office_attackers and
+                        self.jam_grace_timer <= 0.0 and
+                        self.overload_grace_timer <= 0.0
                     )
                     if can_enter:
                         anim.room = "Office"
@@ -1182,6 +1258,8 @@ class Game:
             self.update_animatronics(dt)
         elif self.game_state.state == "jumpscare":
             self.jumpscare.timer += dt
+            if self.jumpscare.timer > self.jumpscare.duration:
+                self.jumpscare.timer = self.jumpscare.duration
 
         self.update_office_effects(dt)
 
@@ -1921,34 +1999,51 @@ class Game:
 
     def draw_jumpscare(self):
         """Draw jumpscare screen"""
-        # Intense red screen
-        intensity = 0.7 + 0.3 * math.sin(self.jumpscare.timer * 15)
-        self.screen.fill((int(100 * intensity), 0, 0))
+        t = self.jumpscare.timer
+        fly_t = min(1.0, t / self.jumpscare.fly_duration)
+        ease = 1 - (1 - fly_t) * (1 - fly_t)
+        self.jumpscare.zoom = ease
 
-        # Multiple pulsing overlays for intensity
-        for i in range(3):
-            alpha = int(255 * (0.3 + 0.4 * math.sin(self.jumpscare.timer * (20 + i * 5))))
-            jumpscare_surface = pygame.Surface((self.game_state.width, self.game_state.height))
-            jumpscare_surface.set_alpha(alpha)
-            jumpscare_surface.fill((255, 20, 20))
-            self.screen.blit(jumpscare_surface, (0, 0))
+        self.screen.fill((0, 0, 0))
+        sprite = self.get_anim_sprite(self.jumpscare.killer)
+        if sprite:
+            base_scale = 0.6 * (self.game_state.width / 1280)
+            scale = base_scale * (1.0 + 2.2 * self.jumpscare.zoom)
+            scaled = pygame.transform.scale(sprite,
+                (int(sprite.get_width() * scale), int(sprite.get_height() * scale)))
+            rect = scaled.get_rect(center=(self.game_state.width // 2,
+                int(self.game_state.height * (0.55 - 0.25 * self.jumpscare.zoom))))
+            self.screen.blit(scaled, rect)
+        else:
+            size = int(80 + 320 * self.jumpscare.zoom)
+            pygame.draw.circle(self.screen, (200, 200, 200),
+                               (self.game_state.width // 2, self.game_state.height // 2), size)
 
-        # Jumpscare text with pulsing
-        scale = 1.0 + 0.1 * math.sin(self.jumpscare.timer * 8)
-        jumpscare_text = self.font_large.render(f"{self.jumpscare.killer} GOT YOU!", True, (255, 255, 255))
-        jumpscare_rect = jumpscare_text.get_rect(center=(self.game_state.width // 2, 
-            int(self.game_state.height * 0.3)))
-        self.screen.blit(jumpscare_text, jumpscare_rect)
+        # After the fly-in, flood red
+        if t >= self.jumpscare.fly_duration:
+            intensity = 0.7 + 0.3 * math.sin((t - self.jumpscare.fly_duration) * 15)
+            self.screen.fill((int(100 * intensity), 0, 0))
+            for i in range(3):
+                alpha = int(255 * (0.3 + 0.4 * math.sin((t - self.jumpscare.fly_duration) * (20 + i * 5))))
+                jumpscare_surface = pygame.Surface((self.game_state.width, self.game_state.height))
+                jumpscare_surface.set_alpha(alpha)
+                jumpscare_surface.fill((255, 20, 20))
+                self.screen.blit(jumpscare_surface, (0, 0))
 
-        # Static overlay
-        self.apply_creepy_static(0.8)
+            jumpscare_text = self.font_large.render(f"{self.jumpscare.killer} GOT YOU!", True, (255, 255, 255))
+            jumpscare_rect = jumpscare_text.get_rect(center=(self.game_state.width // 2,
+                int(self.game_state.height * 0.3)))
+            self.screen.blit(jumpscare_text, jumpscare_rect)
 
-        # Restart instructions
-        restart_text = self.font_medium.render("Press [R] to restart  |  [M] for Menu", 
-            True, (255, 255, 255))
-        restart_rect = restart_text.get_rect(center=(self.game_state.width // 2,
-            int(self.game_state.height * 0.65)))
-        self.screen.blit(restart_text, restart_rect)
+            # Static overlay
+            self.apply_creepy_static(0.8)
+
+            # Restart instructions
+            restart_text = self.font_medium.render("Press [R] to restart  |  [M] for Menu",
+                True, (255, 255, 255))
+            restart_rect = restart_text.get_rect(center=(self.game_state.width // 2,
+                int(self.game_state.height * 0.65)))
+            self.screen.blit(restart_text, restart_rect)
 
     def draw_win(self):
         """Draw win screen"""

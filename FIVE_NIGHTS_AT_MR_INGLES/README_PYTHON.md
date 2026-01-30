@@ -13,6 +13,8 @@ This is a complete rewrite of the LOVE2D Lua game into Python using **Pygame**.
 ??? **5 Nights** with increasing difficulty  
 ??? **Power Management** - drain system with door/light/camera usage  
 ??? **Door Integrity + Jam** - doors wear down and can jam open  
+??? **Open Door Limit** - doors auto-close if left open too long  
+??? **Instant Door Recovery** - door integrity fully restores when open  
 ??? **Deterministic Animatronics AI** - fixed patrols, side attacks, staggered activation, and hunting phases  
 ??? **Mood System** - animatronics have dynamic emotional states that affect behavior  
 ??? **Adaptive Learning** - animatronics learn from player patterns and adjust strategy  
@@ -24,6 +26,7 @@ This is a complete rewrite of the LOVE2D Lua game into Python using **Pygame**.
 ??? **Time System** - survive from 12 AM to 6 AM (configurable night length)  
 ??? **Difficulty Slider** - scales AI speed, power drain, and door wear  
 ??? **Run Variability** - per-run AI profiles keep behavior different each time  
+??? **Retreat Cooldowns** - blocked animatronics back off briefly  
 ??? **Save System** - progress unlocks saved to JSON  
 ??? **Sound & Music** - full audio support with ambience per night  
 ??? **Jumpscare Events** - animatronics attack when doors are breached  
@@ -33,6 +36,7 @@ This is a complete rewrite of the LOVE2D Lua game into Python using **Pygame**.
 ??? **TOS Splash** - second splash (tos_splash.png) with longer hold  
 ??? **Pause Menu** - ESC/P to pause with resume/restart/menu/quit  
 ??? **HUD Expansion** - threat meters, power breakdown, event log, night progress bar  
+??? **Jumpscare Fly-in** - animatronic rushes the camera before red screen  
 
 
 ## Installation

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Five Nights at Mr Ingles's - Python Edition (Pygame)
+Five Nights at Mr Ingles's (Pygame)
 Faithful port of the LOVE2D game to Python
 """
 

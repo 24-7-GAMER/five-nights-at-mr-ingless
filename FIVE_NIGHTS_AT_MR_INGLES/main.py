@@ -52,7 +52,7 @@ SAVE_FILE = "mr_ingles_save.json"
 class GameState:
     """Main game state container"""
     def __init__(self):
-        self.state = "splash"  # "splash", "menu", "playing", "paused", "jumpscare", "win"
+        self.state = "splash"  # "splash", "menu", "playing", "paused", "jumpscare", "win", "anti_cheat", "anti_cheat_message"
         self.night = 1
         self.max_night_unlocked = 1
         self.hour = 12
@@ -652,12 +652,14 @@ class AssetManager:
         self.load_image("anim_librarian", "assets/img/anim_librarian.png")
         self.load_image("anim_vent_crawler", "assets/img/anim_vent.png")  # Using existing anim_vent.png
         self.load_image("mr_ingles_office", "assets/img/mr_ingles_office.png")
+        self.load_image("mr_hall_anti_cheater", "assets/img/mr_hall_anti_cheater.png")
 
         # Sounds
         self.load_sound("door_close", "assets/sfx/door_close.ogg")
         self.load_sound("door_open", "assets/sfx/door_open.ogg")
         self.load_sound("light_toggle", "assets/sfx/light_toggle.ogg")
         self.load_sound("jumpscare", "assets/sfx/jumpscare.ogg")
+        self.load_sound("nice_try", "assets/sfx/NICE_TRY.mp3")
         self.load_sound("bell_6am", "assets/sfx/bell_6am.ogg")
         self.load_sound("static_loop", "assets/sfx/static_loop.ogg")
 
@@ -804,6 +806,14 @@ class Game:
         self.noise_maker_rooms = ["Cafeteria", "Gym", "Library", "Bathrooms", "Dining Area", "Kitchen", "Vent"]
         self.noise_maker_buttons = {}  # Room index -> button rect
         self.night_buttons = {}  # Night number -> button rect
+
+        # Anti-cheat: reflex door spam detection
+        self.reflex_blocks = 0
+        self.last_reflex_time = 0.0
+        self.last_office_entry_time = {"left": -999.0, "right": -999.0, "vent": -999.0}
+        self.anti_cheat_active = False
+        self.anti_cheat_timer = 0.0
+        self.anti_cheat_pending = False
         
         # Minimap data
         self.minimap_room_positions = {}
@@ -922,6 +932,36 @@ class Game:
             self.set_status("Right door jammed open!")
             self.log_event("Right door jammed")
         self.jam_grace_timer = max(self.jam_grace_timer, 3.0)
+
+    def check_reflex_cheat(self, side):
+        """Detect reflex door slams right after an animatronic enters."""
+        if self.anti_cheat_active:
+            return
+        entry_time = self.last_office_entry_time.get(side, -999.0)
+        if entry_time <= 0:
+            return
+        now = time.time()
+        # If the door is slammed within a very short window, count it
+        if now - entry_time <= 0.35:
+            # Decay the counter if it's been a while
+            if now - self.last_reflex_time > 20.0:
+                self.reflex_blocks = 0
+            self.reflex_blocks += 1
+            self.last_reflex_time = now
+            if self.reflex_blocks >= 1:
+                self.trigger_anti_cheat()
+
+    def trigger_anti_cheat(self):
+        """Trigger anti-cheat punishment sequence."""
+        if self.anti_cheat_active:
+            return
+        self.anti_cheat_active = True
+        self.anti_cheat_timer = 0.0
+        self.anti_cheat_pending = False
+        self.assets.stop_music()
+        self.assets.play_sound("nice_try")
+        self.set_status("")
+        self.game_state.state = "anti_cheat"
     
     def apply_creepy_static(self, intensity=0.3):
         """Apply creepy static/noise overlay"""
@@ -1108,6 +1148,14 @@ class Game:
         self.current_safe_spot = None
         self.safe_spot_duration = 0
         self.safe_spots_available = ["Closet", "Under Desk", "Vent"]
+
+        # Reset anti-cheat state
+        self.reflex_blocks = 0
+        self.last_reflex_time = 0.0
+        self.last_office_entry_time = {"left": -999.0, "right": -999.0, "vent": -999.0}
+        self.anti_cheat_active = False
+        self.anti_cheat_timer = 0.0
+        self.anti_cheat_pending = False
         
         # Apply adaptive difficulty based on previous performance
         self.apply_adaptive_difficulty()
@@ -1540,6 +1588,7 @@ class Game:
                         anim.hallway_timer = 0.0
                         anim.attack_windup = 0.0
                         self.side_entry_cooldown[side] = self.entry_cooldown_seconds
+                        self.last_office_entry_time[side] = time.time()
                         self.log_event(f"{anim.name} entered Office")
             else:
                 anim.hallway_timer = 0.0
@@ -1883,6 +1932,19 @@ class Game:
         if self.game_state.state == "menu":
             return
 
+        if self.game_state.state == "anti_cheat":
+            self.anti_cheat_timer += dt
+            if self.anti_cheat_timer >= 2.0 and not self.anti_cheat_pending:
+                self.jumpscare.killer = "Mr Hall"
+                self.jumpscare.active = True
+                self.jumpscare.timer = 0
+                self.game_state.state = "jumpscare"
+                self.anti_cheat_pending = True
+            return
+
+        if self.game_state.state == "anti_cheat_message":
+            return
+
         if self.game_state.state == "intro":
             self.update_intro(dt)
             # keep updating visual effects (optional)
@@ -1914,6 +1976,8 @@ class Game:
             self.jumpscare.timer += dt
             if self.jumpscare.timer > self.jumpscare.duration:
                 self.jumpscare.timer = self.jumpscare.duration
+                if self.anti_cheat_pending:
+                    self.game_state.state = "anti_cheat_message"
 
         self.update_office_effects(dt)
 
@@ -2170,6 +2234,7 @@ class Game:
             "Janitor Bot": "anim_janitor",
             "Librarian": "anim_librarian",
             "Vent Crawler": "anim_vent_crawler",
+            "Mr Hall": "mr_hall_anti_cheater",
         }
         sprite_name = sprites.get(name, "mr_ingles_office")
         return self.assets.get_image(sprite_name)
@@ -2534,6 +2599,42 @@ class Game:
         charges_text = self.font_small.render(f"Charges: {self.office.noise_maker_charges}", True, (255, 255, 100))
         self.screen.blit(charges_text, (20, self.game_state.height - 50))
 
+    def draw_anti_cheat_warning(self):
+        """Draw anti-cheat warning overlay with fading text."""
+        self.draw_background()
+        self.draw_anims()
+        self.draw_hud()
+
+        t = self.anti_cheat_timer
+        duration = 2.0
+        fade = max(0.0, min(1.0, t / duration))
+        alpha = int(255 * (1.0 - abs(fade - 0.5) * 2.0))
+
+        overlay = pygame.Surface((self.game_state.width, self.game_state.height))
+        overlay.set_alpha(120)
+        overlay.fill((0, 0, 0))
+        self.screen.blit(overlay, (0, 0))
+
+        text = "MR. HALL WAS SUMMONED. COWER IN FEAR."
+        text_surf = self.font_medium.render(text, True, (255, 80, 80))
+        text_surf.set_alpha(alpha)
+        rect = text_surf.get_rect(center=(self.game_state.width // 2, self.game_state.height // 2))
+        self.screen.blit(text_surf, rect)
+
+    def draw_anti_cheat_message(self):
+        """Draw anti-cheat black screen message."""
+        self.screen.fill((0, 0, 0))
+        lines = [
+            "WE DON'T LIKE CHEATERS.",
+            "PLAY THE GAME NORMALLY, WITHOUT ABUSING REFLEXES.",
+            "PRESS M TO RETURN TO MENU",
+        ]
+        for i, line in enumerate(lines):
+            color = (255, 255, 255) if i < 2 else (200, 255, 200)
+            text = self.font_medium.render(line, True, color)
+            rect = text.get_rect(center=(self.game_state.width // 2, int(self.game_state.height * 0.40) + i * 50))
+            self.screen.blit(text, rect)
+
     def draw_menu(self):
         """Draw main menu"""
         # Draw background image if available, otherwise use gradient
@@ -2884,6 +2985,10 @@ class Game:
             self.draw_menu()
             return
 
+        if self.game_state.state == "anti_cheat":
+            self.draw_anti_cheat_warning()
+            return
+
         if self.game_state.state == "intro":
             self.draw_intro()
             return
@@ -2894,6 +2999,10 @@ class Game:
 
         if self.game_state.state == "jumpscare":
             self.draw_jumpscare()
+            return
+
+        if self.game_state.state == "anti_cheat_message":
+            self.draw_anti_cheat_message()
             return
 
         if self.game_state.state == "win":
@@ -2978,6 +3087,7 @@ class Game:
                     self.combo_blocks += 1
                     self.combo_timer = 5.0  # 5 seconds to chain
                     self.add_screen_shake(2, 0.2)
+                self.check_reflex_cheat("left")
             self.assets.play_sound(sound)
         elif side == "right":
             if self.office.door_right_closed:
@@ -2999,6 +3109,7 @@ class Game:
                     self.combo_blocks += 1
                     self.combo_timer = 5.0  # 5 seconds to chain
                     self.add_screen_shake(2, 0.2)
+                self.check_reflex_cheat("right")
             self.assets.play_sound(sound)
 
     def toggle_flashlight(self):
@@ -3218,6 +3329,12 @@ class Game:
 
                 if key == "escape":
                     self.running = False
+
+                elif self.game_state.state == "anti_cheat_message":
+                    if key == "m":
+                        self.anti_cheat_active = False
+                        self.anti_cheat_pending = False
+                        self.enter_menu()
 
                 elif self.game_state.state == "menu":
                     if key == "1":

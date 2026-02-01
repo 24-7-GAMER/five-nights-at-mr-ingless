@@ -41,7 +41,7 @@ import pygame
 
 WINDOW_WIDTH = 1280
 WINDOW_HEIGHT = 720
-WINDOW_TITLE = "Five Nights at Mr Ingles's (Python Edition)"
+WINDOW_TITLE = "Five Nights at Mr Ingles's"
 FPS = 60
 SAVE_FILE = "mr_ingles_save.json"
 

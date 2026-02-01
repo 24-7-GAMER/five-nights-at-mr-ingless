@@ -346,6 +346,11 @@ class Animatronic:
             self.hunting_mode = True
         else:
             self.hunting_mode = False
+            # Clear temporary lure targets so they don't stick forever
+            if self.hunt_target_room and self.hunt_target_room != "Office":
+                self.hunt_target_room = None
+                if self.mood == "hunting":
+                    self.mood = "neutral"
 
         # Update mood state (affects behavior)
         if self.mood_timer >= 2.0:
@@ -660,6 +665,7 @@ class AssetManager:
         self.load_sound("light_toggle", "assets/sfx/light_toggle.ogg")
         self.load_sound("jumpscare", "assets/sfx/jumpscare.ogg")
         self.load_sound("nice_try", "assets/sfx/NICE_TRY.mp3")
+        self.load_sound("intro_msg", "assets/sfx/intro_msg.mp3")
         self.load_sound("bell_6am", "assets/sfx/bell_6am.ogg")
         self.load_sound("static_loop", "assets/sfx/static_loop.ogg")
 
@@ -835,6 +841,7 @@ class Game:
         self.intro_index = 0
         self.intro_timer = 0.0
         self.intro_message_duration = 1.5  # seconds per message (incl fade in/out)
+        self.intro_message_durations = []
 
         # Splash screen (on boot)
         self.splash_timer = 0.0
@@ -942,7 +949,7 @@ class Game:
             return
         now = time.time()
         # If the door is slammed within a very short window, count it
-        if now - entry_time <= 0.35:
+        if now - entry_time <= 1.2:
             # Decay the counter if it's been a while
             if now - self.last_reflex_time > 20.0:
                 self.reflex_blocks = 0
@@ -958,6 +965,11 @@ class Game:
         self.anti_cheat_active = True
         self.anti_cheat_timer = 0.0
         self.anti_cheat_pending = False
+        # Force office view and hide animatronics during the warning
+        self.office.cams_open = False
+        self.office.light_on = False
+        for anim in self.animatronics:
+            anim.room = "Hidden"
         self.assets.stop_music()
         self.assets.play_sound("nice_try")
         self.set_status("")
@@ -1172,6 +1184,22 @@ class Game:
             ]
             self.intro_index = 0
             self.intro_timer = 0.0
+            # Play intro voice/message and sync timings
+            intro_sound = self.assets.sounds.get("intro_msg")
+            if intro_sound:
+                self.assets.play_sound("intro_msg")
+                total_len = max(0.5, intro_sound.get_length())
+                weights = [1.0, 0.6, 1.0, 1.0, 1.0]
+                if len(weights) != len(self.intro_messages):
+                    weights = [1.0] * len(self.intro_messages)
+                weight_sum = max(0.1, sum(weights))
+                self.intro_message_durations = [
+                    max(0.4, total_len * (w / weight_sum)) for w in weights
+                ]
+                self.intro_message_duration = max(0.6, total_len / max(1, len(self.intro_messages)))
+            else:
+                self.intro_message_duration = 1.5
+                self.intro_message_durations = []
         else:
             # Load and play night ambience
             ambience_key = f"ambience_n{self.game_state.night}"
@@ -1939,6 +1967,7 @@ class Game:
                 self.jumpscare.active = True
                 self.jumpscare.timer = 0
                 self.game_state.state = "jumpscare"
+                self.assets.play_sound("jumpscare")
                 self.anti_cheat_pending = True
             return
 
@@ -1998,10 +2027,18 @@ class Game:
             return
 
         self.intro_timer += dt
-        total = self.intro_message_duration
-        # determine if we should advance to next message
-        if self.intro_timer >= (self.intro_index + 1) * total:
-            self.intro_index += 1
+        durations = self.intro_message_durations
+        if len(durations) != len(self.intro_messages):
+            durations = [self.intro_message_duration] * len(self.intro_messages)
+        # determine current message based on cumulative durations
+        elapsed = 0.0
+        index = 0
+        for d in durations:
+            if self.intro_timer < elapsed + d:
+                break
+            elapsed += d
+            index += 1
+        self.intro_index = index
 
         # If finished all messages, show tutorial (only on Night 1)
         if self.intro_index >= len(self.intro_messages):
@@ -2022,6 +2059,7 @@ class Game:
             self.intro_messages = []
             self.intro_index = 0
             self.intro_timer = 0.0
+            self.intro_message_durations = []
 
     def draw_splash(self):
         """Draw splash screen with fade in/out"""
@@ -2057,9 +2095,13 @@ class Game:
         if not self.intro_messages:
             return
 
-        total = self.intro_message_duration
+        durations = self.intro_message_durations
+        if len(durations) != len(self.intro_messages):
+            durations = [self.intro_message_duration] * len(self.intro_messages)
+        total = durations[self.intro_index] if self.intro_index < len(durations) else self.intro_message_duration
         # local time within current message
-        t = self.intro_timer - (self.intro_index * total)
+        elapsed = sum(durations[:self.intro_index])
+        t = self.intro_timer - elapsed
         if t < 0:
             t = 0.0
 
@@ -2602,8 +2644,17 @@ class Game:
     def draw_anti_cheat_warning(self):
         """Draw anti-cheat warning overlay with fading text."""
         self.draw_background()
-        self.draw_anims()
-        self.draw_hud()
+
+        # Draw Mr Hall in the office, staring
+        sprite = self.get_anim_sprite("Mr Hall", is_attacking=False)
+        if sprite:
+            base_scale = 0.7 * (self.game_state.width / 1280)
+            scaled = pygame.transform.scale(
+                sprite,
+                (int(sprite.get_width() * base_scale), int(sprite.get_height() * base_scale))
+            )
+            rect = scaled.get_rect(center=(self.game_state.width // 2, int(self.game_state.height * 0.60)))
+            self.screen.blit(scaled, rect)
 
         t = self.anti_cheat_timer
         duration = 2.0

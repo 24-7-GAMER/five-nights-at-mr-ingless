@@ -799,6 +799,12 @@ class Game:
         self.combo_blocks = 0  # Consecutive perfect blocks
         self.combo_timer = 0
         
+        # Noise maker menu state
+        self.noise_maker_menu_active = False
+        self.noise_maker_rooms = ["Cafeteria", "Gym", "Library", "Bathrooms", "Dining Area", "Kitchen", "Vent"]
+        self.noise_maker_buttons = {}  # Room index -> button rect
+        self.night_buttons = {}  # Night number -> button rect
+        
         # Minimap data
         self.minimap_room_positions = {}
         self.coordination_timer = 0.0
@@ -1098,6 +1104,10 @@ class Game:
         self.game_state.hour = 12
         self.game_state.hour_timer = 0
         self.game_state.minutes_elapsed = 0
+        # Reset safe spot state for new night
+        self.current_safe_spot = None
+        self.safe_spot_duration = 0
+        self.safe_spots_available = ["Closet", "Under Desk", "Vent"]
         
         # Apply adaptive difficulty based on previous performance
         self.apply_adaptive_difficulty()
@@ -1465,40 +1475,52 @@ class Game:
         
         # Third pass: check for attacks and blocked behaviors
         for anim in self.animatronics:
-            # Hallway pressure: force entry if door is open, strain if closed
-            if anim.room == "Hallway":
-                if anim.attack_side == "left":
+            # Check if animatronic is adjacent to office (West Hall, East Hall, or Supply Closet on left side)
+            is_adjacent_to_office = anim.room in get_neighbors("Office")
+            
+            if is_adjacent_to_office:
+                # Determine which door(s) they're trying to pressure based on their position
+                if anim.room == "West Hall":
                     door_closed = self.office.door_left_closed
-                elif anim.attack_side == "right":
+                    pressure_left = True
+                    pressure_right = False
+                elif anim.room == "East Hall":
                     door_closed = self.office.door_right_closed
+                    pressure_left = False
+                    pressure_right = True
                 else:
-                    door_closed = self.office.door_left_closed and self.office.door_right_closed
+                    door_closed = self.office.door_left_closed or self.office.door_right_closed
+                    pressure_left = True
+                    pressure_right = True
 
                 if door_closed:
                     anim.hallway_timer = 0.0
                     anim.hallway_block_timer += dt
                     pressure = 3.2 * self.difficulty
-                    if anim.attack_side in ("left", "vent"):
+                    
+                    if pressure_left:
                         self.office.door_left_health = max(0.0, self.office.door_left_health - pressure * dt)
                         if self.office.door_left_health <= 0 and self.office.door_left_jam_timer <= 0:
                             self.break_door("left")
-                    if anim.attack_side in ("right", "vent"):
+                    if pressure_right:
                         self.office.door_right_health = max(0.0, self.office.door_right_health - pressure * dt)
                         if self.office.door_right_health <= 0 and self.office.door_right_jam_timer <= 0:
                             self.break_door("right")
-                    # If blocked too long, they get frustrated and leave temporarily (realistic behavior)
+                    
+                    # If blocked too long, they get frustrated and leave temporarily
                     if anim.hallway_block_timer >= 3.0:
-                        neighbors = [r for r in get_neighbors("Hallway") if r != "Office"]
+                        neighbors = [r for r in get_neighbors(anim.room) if r != "Office"]
                         if neighbors:
                             anim.last_room = anim.room
                             anim.room = neighbors[anim.block_count % len(neighbors)]
                             anim.target_x, anim.target_y = room_position(anim.room, WINDOW_WIDTH, WINDOW_HEIGHT)
                             anim.x = anim.target_x
                             anim.y = anim.target_y
-                            anim.retreat_timer = 8.0  # Increased retreat time
+                            anim.retreat_timer = 8.0  # Stay away for 8 seconds
                             anim.retreat_target = anim.room
                             anim.hallway_block_timer = 0.0
                 else:
+                    # Door is open, can try to enter
                     anim.hallway_timer += dt
                     anim.hallway_block_timer = 0.0
                     side = anim.attack_side
@@ -1872,6 +1894,13 @@ class Game:
             return
 
         if self.game_state.state == "playing":
+            # Decrement safe spot protection timer
+            if self.current_safe_spot:
+                self.safe_spot_duration = max(0, self.safe_spot_duration - dt)
+                # Exit safe spot when timer runs out
+                if self.safe_spot_duration <= 0:
+                    self.current_safe_spot = None
+            
             self.update_power(dt)
             self.update_time(dt)
             self.update_animatronics(dt)
@@ -2457,6 +2486,54 @@ class Game:
                 txt = self.font_small.render(line, True, (170, 200, 220) if i == 0 or i == 5 else (150, 180, 200))
                 self.screen.blit(txt, (cx, cy + i * 16))
 
+    def draw_noise_maker_menu(self):
+        """Draw noise maker room selection menu"""
+        # Semi-transparent overlay
+        overlay = pygame.Surface((self.game_state.width, self.game_state.height))
+        overlay.set_alpha(180)
+        overlay.fill((0, 0, 0))
+        self.screen.blit(overlay, (0, 0))
+        
+        # Title
+        title = self.font_large.render("SELECT ROOM FOR NOISE MAKER", True, (255, 200, 100))
+        title_rect = title.get_rect(center=(self.game_state.width // 2, int(self.game_state.height * 0.15)))
+        self.screen.blit(title, title_rect)
+        
+        # Room options in grid
+        cols = 2
+        start_y = int(self.game_state.height * 0.30)
+        start_x = int(self.game_state.width * 0.2)
+        
+        self.noise_maker_buttons = {}  # Store for click detection
+        
+        for i, room in enumerate(self.noise_maker_rooms):
+            row = i // cols
+            col = i % cols
+            x = start_x + col * int(self.game_state.width * 0.4)
+            y = start_y + row * 70
+            
+            # Room button
+            button_color = (100, 150, 255)
+            button_rect = pygame.Rect(x, y, 300, 50)
+            self.noise_maker_buttons[i] = button_rect  # Store for click detection
+            
+            pygame.draw.rect(self.screen, button_color, button_rect)
+            pygame.draw.rect(self.screen, (200, 200, 255), button_rect, 3)
+            
+            # Room text with number
+            room_text = self.font_small.render(f"{i+1}. {room}", True, (255, 255, 255))
+            text_rect = room_text.get_rect(center=(x + 150, y + 25))
+            self.screen.blit(room_text, text_rect)
+        
+        # Instructions
+        inst_text = self.font_small.render("Press 1-7, Click a room, or ESC to cancel", True, (200, 255, 200))
+        inst_rect = inst_text.get_rect(center=(self.game_state.width // 2, int(self.game_state.height * 0.85)))
+        self.screen.blit(inst_text, inst_rect)
+        
+        # Charges left
+        charges_text = self.font_small.render(f"Charges: {self.office.noise_maker_charges}", True, (255, 255, 100))
+        self.screen.blit(charges_text, (20, self.game_state.height - 50))
+
     def draw_menu(self):
         """Draw main menu"""
         # Draw background image if available, otherwise use gradient
@@ -2523,6 +2600,8 @@ class Game:
         button_spacing = 145
         start_x = self.game_state.width // 2 - (button_spacing * 2) - button_width // 2
         button_y = int(self.game_state.height * 0.42)
+        
+        self.night_buttons = {}  # Store for click detection
 
         for night in range(1, 6):
             button_x = start_x + (night - 1) * button_spacing
@@ -2532,6 +2611,9 @@ class Game:
             # Bobbing animation with enhanced effects
             bob = math.sin(time.time() * 2 + night) * 5 if is_available else 0
             button_y_actual = button_y + bob
+
+            # Store button rect for click detection (use base y, not animated)
+            self.night_buttons[night] = pygame.Rect(button_x, button_y, button_width, button_height)
 
             # Button background with gradient
             if is_available:
@@ -2823,6 +2905,10 @@ class Game:
         self.draw_anims()
         self.draw_hud()
         
+        # Draw noise maker menu if active
+        if self.noise_maker_menu_active:
+            self.draw_noise_maker_menu()
+        
         # Draw particles
         self.draw_particles()
         
@@ -2966,8 +3052,8 @@ class Game:
             else:
                 self.set_status("Right door fully barricaded!")
     
-    def use_noise_maker(self):
-        """Create audio distraction to lure animatronics away"""
+    def deploy_noise_maker(self, room):
+        """Deploy noise maker to specific room to lure animatronics"""
         if self.office.noise_maker_charges <= 0:
             self.set_status("No noise makers left!")
             return
@@ -2979,22 +3065,28 @@ class Game:
         self.office.noise_maker_charges -= 1
         self.audio_distraction_cooldown = 15
         
-        # Find animatronics near office and move them away
-        distracted = 0
+        # All animatronics head to the selected room thinking they heard something
+        lured = 0
         for anim in self.animatronics:
-            if anim.room in ["Office", "Hallway"] and self.rng.random() < 0.7:
-                # Lure them to a random room
-                lure_rooms = ["Cafeteria", "Gym", "Bathrooms", "Library"]
-                anim.room = self.rng.choice(lure_rooms)
-                anim.target_x, anim.target_y = room_position(anim.room, WINDOW_WIDTH, WINDOW_HEIGHT)
-                distracted += 1
+            # Set them to hunt the lure location
+            anim.hunt_target_room = room
+            anim.hunting_timer = 8.0  # Hunt for 8 seconds
+            anim.hunting_mode = True
+            anim.mood = "hunting"
+            lured += 1
         
-        if distracted > 0:
-            self.log_event(f"Distracted {distracted} animatronic(s)!")
-            self.add_screen_shake(2, 0.5)
-            self.add_color_overlay((100, 255, 100, 80), 1.0)
+        if lured > 0:
+            self.set_status(f"Deployed noise maker in {room}! Lured {lured} animatronic(s)!")
+            self.add_screen_shake(3, 0.8)
+            self.add_color_overlay((100, 255, 100, 100), 1.2)
+            self.log_event(f"Noise maker deployed in {room}")
         else:
-            self.log_event("Noise maker deployed (no effect)")
+            self.set_status("No animatronics to lure!")
+    
+    def use_noise_maker(self):
+        """Legacy method - shows menu instead"""
+        self.noise_maker_menu_active = True
+        self.set_status("Choose room (1-7) or ESC to cancel")
     
     def toggle_vent_system(self):
         """Toggle ventilation to reduce camera heat"""
@@ -3071,9 +3163,25 @@ class Game:
                         t = (mx - slider_x) / slider_width
                         self.difficulty = self.clamp(self.difficulty_min + t * (self.difficulty_max - self.difficulty_min), self.difficulty_min, self.difficulty_max)
                         continue
+                    
+                    # Check night button clicks
+                    for night, button_rect in self.night_buttons.items():
+                        if button_rect.collidepoint(mx, my) and night <= self.game_state.max_night_unlocked:
+                            self.start_night(night)
+                            break
+
+                # Handle noise maker menu clicks
+                if self.noise_maker_menu_active and self.game_state.state == "playing":
+                    mx, my = self.scale_mouse_pos(event.pos)
+                    for i, button_rect in self.noise_maker_buttons.items():
+                        if button_rect.collidepoint(mx, my):
+                            selected_room = self.noise_maker_rooms[i]
+                            self.deploy_noise_maker(selected_room)
+                            self.noise_maker_menu_active = False
+                            break
 
                 # Handle minimap clicks when playing
-                if self.game_state.state == "playing":
+                if self.game_state.state == "playing" and not self.noise_maker_menu_active:
                     clicked_room = self.get_clicked_room(self.scale_mouse_pos(event.pos))
                     if clicked_room:
                         # Find camera index for this room
@@ -3162,13 +3270,30 @@ class Game:
                     elif key == "b":
                         self.use_barricade()
                     elif key == "n":
-                        self.use_noise_maker()
+                        self.noise_maker_menu_active = True
+                        self.set_status("Choose room (1-7) or ESC to cancel")
                     elif key == "v":
                         self.toggle_vent_system()
                     elif key == "c":
                         self.use_safe_spot()
                     elif key in ("escape", "p"):
-                        self.game_state.state = "paused"
+                        if self.noise_maker_menu_active:
+                            self.noise_maker_menu_active = False
+                            self.set_status("")
+                        else:
+                            self.game_state.state = "paused"
+                
+                elif self.game_state.state == "playing" and self.noise_maker_menu_active:
+                    # Handle room selection for noise maker
+                    if key in ("1", "2", "3", "4", "5", "6", "7"):
+                        room_index = int(key) - 1
+                        if room_index < len(self.noise_maker_rooms):
+                            selected_room = self.noise_maker_rooms[room_index]
+                            self.deploy_noise_maker(selected_room)
+                            self.noise_maker_menu_active = False
+                    elif key == "escape":
+                        self.noise_maker_menu_active = False
+                        self.set_status("")
 
                 elif self.game_state.state == "paused":
                     if key in ("escape", "p"):

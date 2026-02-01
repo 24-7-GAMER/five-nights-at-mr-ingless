@@ -63,6 +63,16 @@ class GameState:
         self.height = WINDOW_HEIGHT
         self.status = ""
         self.start_time = time.time()
+        
+        # Environmental Events
+        self.active_events = []
+        self.event_cooldown = 0
+        self.lights_flickering = False
+        self.flicker_timer = 0
+        self.hallway_darkness = 0
+        self.temperature = 70  # Room temperature affects mechanics
+        self.ventilation_blocked = False
+        self.phantom_sounds = []
 
     def elapsed_time(self):
         """Get elapsed time since game start"""
@@ -83,6 +93,9 @@ class PowerSystem:
     def reset(self):
         self.current = self.max
         self.outage = False
+        self.emergency_mode = False
+        self.emergency_timer = 0
+        self.reserve_power = 0  # Hidden reserve for emergencies
 
 
 class Office:
@@ -102,8 +115,15 @@ class Office:
         self.door_right_jam_timer = 0.0
         self.door_left_open_timer = 0.0
         self.door_right_open_timer = 0.0
-        self.cam_heat = 0.0
-        self.cam_overload_timer = 0.0
+        
+        # New features
+        self.flashlight_battery = 100.0
+        self.vent_system_active = True
+        self.barricade_left = 0  # 0-3 levels
+        self.barricade_right = 0
+        self.noise_maker_charges = 3
+        self.safe_mode_timer = 0.0
+        self.movement_noise_level = 0.0
 
     def reset(self):
         self.door_left_closed = False
@@ -120,14 +140,16 @@ class Office:
         self.door_right_jam_timer = 0.0
         self.door_left_open_timer = 0.0
         self.door_right_open_timer = 0.0
-        self.cam_heat = 0.0
-        self.cam_overload_timer = 0.0
 
 
 class CameraSystem:
     """Camera switching system"""
     def __init__(self):
-        self.cameras = ["Cafeteria", "Hallway", "Gym", "Library", "Bathrooms", "Vent"]
+        self.cameras = [
+            "Stage", "Dining Area", "Backstage", "Kitchen",
+            "West Hall", "East Hall", "Cafeteria", "Gym",
+            "Library", "Bathrooms", "Vent", "Supply Closet", "Restrooms"
+        ]
         self.current_index = 0
 
     def switch(self, index):
@@ -159,13 +181,20 @@ class Jumpscare:
 # =====================================================
 
 ROOM_GRAPH = {
-    "Office": ["Hallway"],
-    "Hallway": ["Office", "Cafeteria", "Gym", "Bathrooms"],
-    "Cafeteria": ["Hallway", "Library"],
-    "Gym": ["Hallway"],
-    "Library": ["Cafeteria"],
-    "Bathrooms": ["Hallway", "Vent"],
-    "Vent": ["Bathrooms", "Hallway"],
+    "Office": ["West Hall", "East Hall"],
+    "West Hall": ["Office", "Cafeteria", "Gym", "Supply Closet"],
+    "East Hall": ["Office", "Library", "Bathrooms", "Restrooms"],
+    "Cafeteria": ["West Hall", "Dining Area", "Library"],
+    "Dining Area": ["Cafeteria", "Stage", "Kitchen"],
+    "Stage": ["Dining Area", "Backstage"],
+    "Backstage": ["Stage", "Kitchen"],
+    "Kitchen": ["Dining Area", "Backstage", "East Hall"],
+    "Gym": ["West Hall", "Cafeteria"],
+    "Library": ["Cafeteria", "East Hall", "Bathrooms"],
+    "Bathrooms": ["Library", "East Hall", "Vent"],
+    "Vent": ["Bathrooms", "Restrooms"],
+    "Supply Closet": ["West Hall"],
+    "Restrooms": ["East Hall", "Vent"],
 }
 
 
@@ -242,6 +271,61 @@ class Animatronic:
         self.retreat_target = None
         self.last_room = start_room
         self.hallway_block_timer = 0.0
+        
+        # AI Personality System (randomized each night)
+        self.personality = self.assign_personality(rng)
+        self.patience = rng.uniform(0.5, 2.0)  # How long they wait before moving
+        self.curiosity = rng.uniform(0.3, 1.5)  # How likely to investigate player actions
+        self.persistence = rng.uniform(0.4, 1.8)  # How often they retry after being blocked
+        self.teamwork = rng.uniform(0.2, 1.3)  # How well they coordinate with others
+        self.deception = rng.uniform(0.1, 1.2)  # How likely to fake movements
+        self.sound_sensitivity = rng.uniform(0.5, 1.5)  # How much they react to sounds
+        self.camera_awareness = rng.uniform(0.3, 1.4)  # How they react to being watched
+        
+        # Behavior state
+        self.is_decoy = False
+        self.decoy_timer = 0.0
+        self.last_player_action_time = 0
+        self.stalking_mode = False
+        self.ambush_position = None
+        self.fake_movement_cooldown = 0.0
+        
+        # Special abilities
+        self.special_ability = self.assign_special_ability(rng)
+        self.ability_cooldown = 0.0
+        self.ability_active = False
+        self.can_disable_lights = False
+        self.can_jam_cameras = False
+        self.can_drain_power = False
+        self.speed_boost_active = False
+    
+    def assign_special_ability(self, rng):
+        """Assign a unique special ability"""
+        abilities = [
+            "light_killer",     # Can disable lights temporarily
+            "camera_jammer",    # Can jam cameras
+            "power_drainer",    # Extra power drain
+            "speed_demon",      # Periodic speed boosts
+            "door_breaker",     # Extra damage to doors
+            "silent_stalker",   # Makes no sound when moving
+            "mimic",            # Can appear in multiple cameras
+            "teleporter"        # Can skip rooms
+        ]
+        return rng.choice(abilities) if rng else "speed_demon"
+    
+    def assign_personality(self, rng):
+        """Assign a random personality archetype"""
+        personalities = [
+            "aggressive",    # Moves fast, attacks often
+            "patient",       # Waits for perfect opportunity
+            "erratic",       # Unpredictable movements
+            "stalker",       # Follows player patterns
+            "team_player",   # Coordinates with others
+            "trickster",     # Uses fake movements
+            "cautious",      # Retreats often, slow approach
+            "relentless"     # Never gives up, constant pressure
+        ]
+        return rng.choice(personalities) if rng else "aggressive"
 
     def update(self, dt, game_state=None, difficulty=1.0):
         """Update animatronic with deterministic AI"""
@@ -292,19 +376,89 @@ class Animatronic:
         # Communication cooldown
         if self.communication_cooldown > 0:
             self.communication_cooldown -= dt
+        
+        # Execute personality-specific behaviors
+        self.update_personality_behavior(dt, game_state)
 
+    def update_personality_behavior(self, dt, game_state=None):
+        """Execute personality-specific behaviors"""
+        if not game_state:
+            return
+        
+        # Update decoy status
+        if self.decoy_timer > 0:
+            self.decoy_timer -= dt
+            if self.decoy_timer <= 0:
+                self.is_decoy = False
+        
+        if self.fake_movement_cooldown > 0:
+            self.fake_movement_cooldown -= dt
+        
+        # Personality-specific behaviors
+        if self.personality == "trickster" and self.fake_movement_cooldown <= 0:
+            if self.rng and self.rng.random() < (0.1 * self.deception * dt):
+                self.create_fake_movement(game_state)
+                self.fake_movement_cooldown = self.rng.uniform(8, 15)
+        
+        elif self.personality == "stalker":
+            # Track player patterns and predict movements
+            if len(self.player_action_memory) > 3:
+                self.stalking_mode = True
+                self.ambush_position = self.predict_player_weakness()
+        
+        elif self.personality == "patient":
+            # Wait longer before moving, but move with purpose
+            self.move_interval = self.base_interval * (1.5 * self.patience)
+        
+        elif self.personality == "aggressive":
+            # Increase move speed and aggression
+            self.adaptive_aggro = min(2.5, self.adaptive_aggro * 1.1)
+        
+        elif self.personality == "erratic":
+            # Randomize behavior to be unpredictable
+            if self.rng and self.rng.random() < 0.05:
+                self.mood = self.rng.choice(["aggressive", "cautious", "neutral"])
+    
+    def create_fake_movement(self, game_state):
+        """Create a fake movement sound/event"""
+        if hasattr(game_state, 'phantom_sounds'):
+            fake_location = self.rng.choice(list(ROOM_GRAPH.keys()))
+            game_state.phantom_sounds.append({
+                'location': fake_location,
+                'time': time.time(),
+                'type': 'fake_movement'
+            })
+    
+    def predict_player_weakness(self):
+        """Analyze player patterns to find weaknesses"""
+        if not self.player_action_memory:
+            return None
+        
+        # Count door usage patterns
+        left_blocks = sum(1 for action in self.player_action_memory if action.get('side') == 'left')
+        right_blocks = sum(1 for action in self.player_action_memory if action.get('side') == 'right')
+        
+        # Attack the less-defended side
+        if left_blocks < right_blocks:
+            return "left"
+        elif right_blocks < left_blocks:
+            return "right"
+        return None
+    
     def update_mood(self, game_state=None):
         """Update mood based on situation (deterministic)"""
         minutes = game_state.minutes_elapsed if game_state else 0
         night = game_state.night if game_state else 1
         if self.hunting_mode:
             self.mood = "hunting"
-        elif self.block_count >= 4 or minutes >= 240 or night >= 3:
+        elif self.block_count >= 3:  # If frustrated enough, go hunting
+            self.mood = "hunting"
+        elif self.block_count >= 4 or minutes >= 180 or night >= 2:
             self.mood = "aggressive"
-        elif self.block_count >= 2 or minutes >= 120:
+        elif self.block_count >= 2 or minutes >= 60:
             self.mood = "cautious"
         else:
-            self.mood = "neutral"
+            self.mood = "hunting"  # Always lean toward hunting/office-seeking
 
     def get_mood_multiplier(self):
         """Get aggression multiplier based on mood"""
@@ -472,20 +626,31 @@ class AssetManager:
         self.load_image("office", "assets/img/office.png")
         self.load_image("door_left", "assets/img/office_door_left.png")
         self.load_image("door_right", "assets/img/office_door_right.png")
+        # Room cameras
+        self.load_image("cam_stage", "assets/img/cam_stage.png")
+        self.load_image("cam_dining_area", "assets/img/cam_dining_area.png")
+        self.load_image("cam_backstage", "assets/img/cam_backstage.png")
+        self.load_image("cam_kitchen", "assets/img/cam_kitchen.png")
+        self.load_image("cam_west_hall", "assets/img/cam_west_hall.png")
+        self.load_image("cam_east_hall", "assets/img/cam_east_hall.png")
         self.load_image("cam_cafeteria", "assets/img/cam_cafeteria.png")
-        self.load_image("cam_hallway", "assets/img/cam_hallway.png")
         self.load_image("cam_gym", "assets/img/cam_gym.png")
         self.load_image("cam_library", "assets/img/cam_library.png")
         self.load_image("cam_bathrooms", "assets/img/cam_bathrooms.png")
         self.load_image("cam_vent", "assets/img/cam_vent.png")
+        self.load_image("cam_supply_closet", "assets/img/cam_supply_closet.png")
+        self.load_image("cam_restrooms", "assets/img/cam_restrooms.png")
         self.load_image("title", "assets/img/title.png")
         self.load_image("menu_background", "assets/img/menu_background.png")
         self.load_image("intro_splash", "assets/img/intro_splashscreen.png")
         self.load_image("tos_splash", "assets/img/tos_splash.png")
+        # Animatronics
         self.load_image("anim_mr_ingles", "assets/img/anim_mr_ingles.png")
+        self.load_image("anim_scary_ingles", "assets/img/anim_scary_ingles.png")  # Optional
+        self.load_image("anim_guard_ingles", "assets/img/anim_guard_ingles.png")  # Optional
         self.load_image("anim_janitor", "assets/img/anim_janitor.png")
         self.load_image("anim_librarian", "assets/img/anim_librarian.png")
-        self.load_image("anim_vent", "assets/img/anim_vent.png")
+        self.load_image("anim_vent_crawler", "assets/img/anim_vent.png")  # Using existing anim_vent.png
         self.load_image("mr_ingles_office", "assets/img/mr_ingles_office.png")
 
         # Sounds
@@ -497,11 +662,7 @@ class AssetManager:
         self.load_sound("static_loop", "assets/sfx/static_loop.ogg")
 
         # Music/Ambience
-        self.load_music("ambience_n1", "assets/sfx/ambience_n1.ogg")
-        self.load_music("ambience_n2", "assets/sfx/ambience_n2.ogg")
-        self.load_music("ambience_n3", "assets/sfx/ambience_n3.ogg")
-        self.load_music("ambience_n4", "assets/sfx/ambience_n4.ogg")
-        self.load_music("ambience_n5", "assets/sfx/ambience_n5.ogg")
+        self.load_music("ambience", "assets/music/ambience.mp3")
         self.load_music("menu_theme", "assets/music/menu_theme.ogg")
 
     def play_sound(self, name):
@@ -512,14 +673,18 @@ class AssetManager:
 
     def play_music(self, name, loops=-1):
         """Play music (streaming)"""
+        # If trying to play ambience (any night), use the single ambience.mp3
+        if name and name.startswith("ambience"):
+            name = "ambience"
+        
         if name in self.music:
             pygame.mixer.music.stop()
             try:
                 pygame.mixer.music.load(self.music[name])
-                pygame.mixer.music.set_volume(0.6)
+                pygame.mixer.music.set_volume(1.0)
                 pygame.mixer.music.play(loops)
                 self.current_music = name
-            except:
+            except Exception as e:
                 pass
 
     def stop_music(self):
@@ -542,10 +707,19 @@ class Game:
         pygame.init()
         pygame.mixer.init()
 
-        self.screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
+        # Create resizable window
+        self.screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.RESIZABLE)
         pygame.display.set_caption(WINDOW_TITLE)
         self.clock = pygame.time.Clock()
         self.running = True
+        
+        # Track window size for scaling
+        self.window_width = WINDOW_WIDTH
+        self.window_height = WINDOW_HEIGHT
+        # Render to this surface at fixed resolution, then scale to screen
+        self.render_surface = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT))
+        # Temporarily swap so all existing code renders to render_surface
+        self.screen, self.render_surface = self.render_surface, self.screen
 
         # Game components
         self.game_state = GameState()
@@ -580,9 +754,50 @@ class Game:
         self.overload_grace_timer = 0.0
         self.door_open_limit = 7.0
         self.power_usage = {"base": 0.0, "doors": 0.0, "lights": 0.0, "cams": 0.0, "surge": 1.0}
-        self.event_log = []
-        self.event_log_max = 6
         self.show_controls = True
+        
+        # Environmental event system
+        self.phantom_sound_cooldown = 0
+        self.environmental_event_timer = 0
+        self.next_event_time = 30  # First event after 30 seconds
+        self.hallucination_mode = False
+        self.hallucination_timer = 0
+        
+        # Animatronic coordination
+        self.coordinated_attack_cooldown = 0
+        self.active_coordination = None
+        
+        # Dynamic stats tracking
+        self.total_door_closes = 0
+        self.total_camera_checks = 0
+        self.perfect_blocks = 0
+        self.failed_blocks = 0
+        self.performance_score = 0
+        self.high_scores = {}  # Night -> score mapping
+        
+        # Screen effects
+        self.screen_shake_intensity = 0
+        self.screen_shake_duration = 0
+        self.color_overlay = None  # (r, g, b, alpha) or None
+        self.color_overlay_timer = 0
+        self.particles = []  # List of particle effects
+        
+        # Amazing new features
+        self.threat_level = 0  # Real-time threat assessment 0-100
+        self.audio_distraction_cooldown = 0
+        self.generator_minigame_active = False
+        self.generator_progress = 0
+        self.generator_target_keys = []
+        self.nightmare_mode = False
+        self.safe_spots_available = ["Closet", "Under Desk", "Vent"]
+        self.current_safe_spot = None
+        self.safe_spot_duration = 0
+        self.footstep_sounds = []  # Track animatronic movements
+        self.breathing_intensity = 0  # Increases with danger
+        self.heartbeat_active = False
+        self.last_noise_time = 0
+        self.combo_blocks = 0  # Consecutive perfect blocks
+        self.combo_timer = 0
         
         # Minimap data
         self.minimap_room_positions = {}
@@ -616,13 +831,16 @@ class Game:
         # Tutorial slideshow (after intro)
         self.tutorial_index = 0
         self.tutorial_timer = 0.0
-        self.tutorial_slide_duration = 4.0  # seconds per slide
+        self.tutorial_slide_duration = 5.0  # seconds per slide (increased for more content)
         self.tutorial_slides = [
-            {"title": "CONTROLS", "text": "Use Q and E to control the doors\nQ = LEFT DOOR  |  E = RIGHT DOOR"},
-            {"title": "MANAGING POWER", "text": "F toggles the office light\nPower surges at :15, :30, :45\nKeep an eye on the power bar"},
-            {"title": "CAMERAS", "text": "Press TAB to open/close cameras\nCams overheat if used too long\nClick the minimap to jump to rooms"},
-            {"title": "SURVIVAL", "text": "Doors have integrity and can jam\nAnimatronics attack from a side\nSurvive until 6 AM to win!"},
-            {"title": "GOOD LUCK!", "text": "Watch the animatronics carefully\nThey learn from your patterns\nStay alert and survive the night!"},
+            {"title": "BASIC CONTROLS", "text": "Use Q and E to control doors\nPress F to toggle flashlight\nPress TAB to open cameras\nClose doors when animatronics approach"},
+            {"title": "CAMERA SYSTEM", "text": "Watch 10 different rooms\nAnimatronics move through them\nClick minimap to jump to rooms\nStay vigilant at all times"},
+            {"title": "MULTIPLE PATHS", "text": "Two hallways lead to your office\nWest Hall on the left side\nEast Hall on the right side\nMonitor both carefully"},
+            {"title": "POWER MANAGEMENT", "text": "Power surges at :15, :30, :45\nCameras drain power when viewing\nDoors drain power when closed\nBalance usage to survive"},
+            {"title": "AI BEHAVIOR", "text": "Each animatronic has unique traits\nThey patrol different routes\nSome are fast, others are sneaky\nLearn their patterns"},
+            {"title": "DOOR HEALTH", "text": "Doors can jam if damaged\nAnimatronics wear them down\nJammed doors leave you exposed\nPrevent attacks to preserve them"},
+            {"title": "SURVIVE UNTIL 6 AM", "text": "Each hour lasts several minutes\nWatch the clock in top-right\nManage resources carefully\nMake it through the night"},
+            {"title": "GOOD LUCK", "text": "Stay alert and aware\nUse cameras to track movement\nDon't waste power\nYou can do this"},
         ]
 
         # Load everything
@@ -636,17 +854,54 @@ class Game:
         """Clamp value between a and b"""
         return max(a, min(x, b))
     
+    def scale_mouse_pos(self, pos):
+        """Scale mouse position from window coordinates to game coordinates"""
+        mx, my = pos
+        # Calculate scale factors
+        scale_x = WINDOW_WIDTH / self.window_width
+        scale_y = WINDOW_HEIGHT / self.window_height
+        # Use the smaller scale to maintain aspect ratio
+        scale = min(scale_x, scale_y)
+        # Calculate scaled dimensions
+        scaled_w = WINDOW_WIDTH / scale
+        scaled_h = WINDOW_HEIGHT / scale
+        # Calculate offset for centering
+        offset_x = (self.window_width - scaled_w) / 2
+        offset_y = (self.window_height - scaled_h) / 2
+        # Scale and offset mouse position
+        game_x = (mx - offset_x) * scale
+        game_y = (my - offset_y) * scale
+        return (game_x, game_y)
+    
+    def scale_and_blit_to_screen(self):
+        """Scale the render surface to the actual window while maintaining aspect ratio"""
+        # Calculate scale to fit window while maintaining aspect ratio
+        scale_x = self.window_width / WINDOW_WIDTH
+        scale_y = self.window_height / WINDOW_HEIGHT
+        scale = min(scale_x, scale_y)
+        
+        # Calculate scaled dimensions
+        scaled_width = int(WINDOW_WIDTH * scale)
+        scaled_height = int(WINDOW_HEIGHT * scale)
+        
+        # Calculate position to center the scaled surface
+        x = (self.window_width - scaled_width) // 2
+        y = (self.window_height - scaled_height) // 2
+        
+        # Fill screen with black bars
+        self.render_surface.fill((0, 0, 0))
+        
+        # Scale and blit the game surface
+        scaled_surface = pygame.transform.scale(self.screen, (scaled_width, scaled_height))
+        self.render_surface.blit(scaled_surface, (x, y))
+    
     def set_status(self, msg=""):
         """Set status message"""
         self.game_state.status = msg or ""
 
-    def log_event(self, msg):
-        """Add an event to the HUD log"""
-        stamp = f"{self.game_state.minutes_elapsed // 60:02d}:{self.game_state.minutes_elapsed % 60:02d}"
-        entry = f"{stamp} - {msg}"
-        self.event_log.insert(0, entry)
-        if len(self.event_log) > self.event_log_max:
-            self.event_log = self.event_log[:self.event_log_max]
+    def log_event(self, msg, add_personality_hint=False):
+        """Event log disabled"""
+        pass
 
     def break_door(self, side):
         """Force a door to jam open when its health is depleted"""
@@ -680,8 +935,8 @@ class Game:
     def draw_minimap(self, opacity=255):
         """Draw camera minimap showing room layout and animatronic positions"""
         # Minimap dimensions
-        minimap_width = 280
-        minimap_height = 200
+        minimap_width = 340
+        minimap_height = 240
         minimap_x = self.game_state.width - minimap_width - 20
         minimap_y = 80
         
@@ -700,13 +955,20 @@ class Game:
         
         # Scale and position for minimap rooms
         room_positions = {
-            "Office": (minimap_x + 140, minimap_y + 140),
-            "Hallway": (minimap_x + 140, minimap_y + 90),
-            "Cafeteria": (minimap_x + 80, minimap_y + 90),
-            "Gym": (minimap_x + 200, minimap_y + 90),
-            "Library": (minimap_x + 60, minimap_y + 40),
-            "Bathrooms": (minimap_x + 220, minimap_y + 40),
-            "Vent": (minimap_x + 140, minimap_y + 20),
+            "Office": (minimap_x + 170, minimap_y + 200),
+            "West Hall": (minimap_x + 100, minimap_y + 200),
+            "East Hall": (minimap_x + 240, minimap_y + 200),
+            "Cafeteria": (minimap_x + 100, minimap_y + 150),
+            "Gym": (minimap_x + 50, minimap_y + 150),
+            "Library": (minimap_x + 240, minimap_y + 150),
+            "Bathrooms": (minimap_x + 290, minimap_y + 150),
+            "Stage": (minimap_x + 170, minimap_y + 35),
+            "Dining Area": (minimap_x + 170, minimap_y + 90),
+            "Backstage": (minimap_x + 240, minimap_y + 35),
+            "Kitchen": (minimap_x + 240, minimap_y + 90),
+            "Supply Closet": (minimap_x + 40, minimap_y + 200),
+            "Restrooms": (minimap_x + 300, minimap_y + 200),
+            "Vent": (minimap_x + 290, minimap_y + 120),
         }
         
         # Store positions for click detection
@@ -766,6 +1028,8 @@ class Game:
                     if "difficulty" in data:
                         self.difficulty = self.clamp(float(data.get("difficulty", self.difficulty)),
                                                      self.difficulty_min, self.difficulty_max)
+                    if "high_scores" in data:
+                        self.high_scores = {int(k): v for k, v in data["high_scores"].items()}
             except:
                 self.game_state.max_night_unlocked = 1
         else:
@@ -776,6 +1040,7 @@ class Game:
         data = {
             "max_night": self.clamp(self.game_state.max_night_unlocked, 1, 5),
             "difficulty": self.clamp(self.difficulty, self.difficulty_min, self.difficulty_max),
+            "high_scores": self.high_scores,
         }
         try:
             with open(SAVE_FILE, 'w') as f:
@@ -789,31 +1054,31 @@ class Game:
             return base + self.rng.uniform(-spread, spread)
 
         self.animatronics = [
-            Animatronic("Mr Ingles", "Cafeteria", jitter(0.40, 0.06), jitter(5.5, 0.6), "teleport",
-                        attack_side="left",
-                        patrol_route=["Cafeteria", "Hallway", "Cafeteria", "Library"],
-                        start_delay_minutes=self.rng.randint(3, 7),
-                        hallway_entry_delay=jitter(2.2, 0.4),
-                        aggression_ramp=jitter(0.30, 0.08),
-                        rng=self.rng),
-            Animatronic("Janitor Bot", "Bathrooms", jitter(0.34, 0.05), jitter(6.5, 0.7), "teleport",
+            Animatronic("Scary Mr Ingles", "Supply Closet", jitter(0.52, 0.08), jitter(5.0, 0.5), "normal",
                         attack_side="right",
-                        patrol_route=["Bathrooms", "Hallway", "Bathrooms", "Gym"],
-                        start_delay_minutes=self.rng.randint(12, 18),
+                        patrol_route=["Supply Closet", "West Hall", "Gym", "Cafeteria", "Dining Area"],
+                        start_delay_minutes=self.rng.randint(2, 5),
+                        hallway_entry_delay=jitter(2.2, 0.4),
+                        aggression_ramp=jitter(0.25, 0.06),
+                        rng=self.rng),
+            Animatronic("Janitor Bot", "Backstage", jitter(0.34, 0.05), jitter(6.5, 0.7), "teleport",
+                        attack_side="right",
+                        patrol_route=["Backstage", "Kitchen", "East Hall", "Bathrooms"],
+                        start_delay_minutes=self.rng.randint(5, 10),
                         hallway_entry_delay=jitter(2.6, 0.4),
                         aggression_ramp=jitter(0.22, 0.06),
                         rng=self.rng),
-            Animatronic("Librarian", "Library", jitter(0.32, 0.05), jitter(6.8, 0.6), "teleport",
+            Animatronic("Librarian", "Stage", jitter(0.32, 0.05), jitter(6.8, 0.6), "teleport",
                         attack_side="left",
-                        patrol_route=["Library", "Cafeteria", "Hallway"],
-                        start_delay_minutes=self.rng.randint(8, 13),
+                        patrol_route=["Stage", "Dining Area", "Cafeteria", "Library"],
+                        start_delay_minutes=self.rng.randint(6, 11),
                         hallway_entry_delay=jitter(2.4, 0.4),
                         aggression_ramp=jitter(0.24, 0.06),
                         rng=self.rng),
             Animatronic("Vent Crawler", "Vent", jitter(0.38, 0.05), jitter(5.8, 0.6), "vent",
                         attack_side="vent",
-                        patrol_route=["Vent", "Bathrooms", "Hallway"],
-                        start_delay_minutes=self.rng.randint(18, 24),
+                        patrol_route=["Vent", "Bathrooms", "Restrooms", "East Hall"],
+                        start_delay_minutes=self.rng.randint(15, 21),
                         hallway_entry_delay=jitter(2.0, 0.3),
                         aggression_ramp=jitter(0.28, 0.06),
                         rng=self.rng),
@@ -903,6 +1168,79 @@ class Game:
     # =====================================================
     # UPDATE FUNCTIONS
     # =====================================================
+    
+    def add_screen_shake(self, intensity, duration):
+        """Add screen shake effect"""
+        self.screen_shake_intensity = max(self.screen_shake_intensity, intensity)
+        self.screen_shake_duration = max(self.screen_shake_duration, duration)
+    
+    def add_color_overlay(self, color, duration):
+        """Add temporary color overlay (r, g, b, alpha)"""
+        self.color_overlay = color
+        self.color_overlay_timer = duration
+    
+    def add_particle_burst(self, x, y, count, color, speed_range=(1, 3)):
+        """Create a burst of particles at position"""
+        for _ in range(count):
+            angle = self.rng.uniform(0, math.pi * 2)
+            speed = self.rng.uniform(*speed_range)
+            self.particles.append({
+                'x': x,
+                'y': y,
+                'vx': math.cos(angle) * speed,
+                'vy': math.sin(angle) * speed,
+                'color': color,
+                'life': 1.0,
+                'size': self.rng.randint(2, 5)
+            })
+    
+    def update_screen_effects(self, dt):
+        """Update all screen effects"""
+        # Update screen shake
+        if self.screen_shake_duration > 0:
+            self.screen_shake_duration -= dt
+            if self.screen_shake_duration <= 0:
+                self.screen_shake_intensity = 0
+        
+        # Update color overlay
+        if self.color_overlay_timer > 0:
+            self.color_overlay_timer -= dt
+            if self.color_overlay_timer <= 0:
+                self.color_overlay = None
+        
+        # Update particles
+        for particle in self.particles[:]:
+            particle['x'] += particle['vx']
+            particle['y'] += particle['vy']
+            particle['vy'] += 0.2  # Gravity
+            particle['life'] -= dt
+            if particle['life'] <= 0:
+                self.particles.remove(particle)
+    
+    def draw_particles(self):
+        """Draw all active particles"""
+        for particle in self.particles:
+            alpha = int(255 * particle['life'])
+            color = particle['color'][:3]
+            size = max(1, int(particle['size'] * particle['life']))
+            pos = (int(particle['x']), int(particle['y']))
+            pygame.draw.circle(self.screen, color, pos, size)
+    
+    def apply_screen_shake(self):
+        """Get screen shake offset"""
+        if self.screen_shake_intensity > 0:
+            shake_x = self.rng.uniform(-self.screen_shake_intensity, self.screen_shake_intensity)
+            shake_y = self.rng.uniform(-self.screen_shake_intensity, self.screen_shake_intensity)
+            return int(shake_x), int(shake_y)
+        return 0, 0
+    
+    def apply_color_overlay(self):
+        """Apply color overlay to screen"""
+        if self.color_overlay:
+            overlay = pygame.Surface((self.game_state.width, self.game_state.height))
+            overlay.set_alpha(self.color_overlay[3] if len(self.color_overlay) > 3 else 128)
+            overlay.fill(self.color_overlay[:3])
+            self.screen.blit(overlay, (0, 0))
 
     def update_office_effects(self, dt):
         """Update office visual effects"""
@@ -928,24 +1266,8 @@ class Game:
         if self.office.door_right_jam_timer > 0:
             self.office.door_right_jam_timer = max(0, self.office.door_right_jam_timer - dt * 1.5)
 
-        # Door open limit (auto-close if open too long; recovers immediately when closed)
-        if not self.office.door_left_closed:
-            self.office.door_left_open_timer += dt
-            if self.office.door_left_open_timer >= self.door_open_limit:
-                self.office.door_left_closed = True
-                self.office.door_left_open_timer = 0.0
-                self.log_event("Left door auto-closed (open limit)")
-        else:
-            self.office.door_left_open_timer = 0.0
-
-        if not self.office.door_right_closed:
-            self.office.door_right_open_timer += dt
-            if self.office.door_right_open_timer >= self.door_open_limit:
-                self.office.door_right_closed = True
-                self.office.door_right_open_timer = 0.0
-                self.log_event("Right door auto-closed (open limit)")
-        else:
-            self.office.door_right_open_timer = 0.0
+        # Doors stay open/closed until player toggles them - no auto-close
+        # This gives players full control
 
         # Entry cooldown timers (fairness)
         for side in self.side_entry_cooldown:
@@ -981,7 +1303,7 @@ class Game:
         doors_open = int(not self.office.door_left_closed) + int(not self.office.door_right_closed)
         avg_health = (self.office.door_left_health + self.office.door_right_health) / 2.0
         low_power = self.power.current < 20
-        cam_disabled = self.office.cam_overload_timer > 0 or self.power.outage
+        cam_disabled = self.power.outage
         jam_active = self.office.door_left_jam_timer > 0 or self.office.door_right_jam_timer > 0
 
         cap = 2
@@ -1032,32 +1354,34 @@ class Game:
             self.power.current = 0
             if not self.power.outage:
                 self.power.outage = True
+                self.power.emergency_mode = True
+                self.power.emergency_timer = 45  # 45 seconds of emergency power
+                self.power.reserve_power = 15  # Hidden reserve
                 self.office.door_left_closed = False
                 self.office.door_right_closed = False
                 self.office.light_on = False
                 self.office.cams_open = False
-                self.office.cam_heat = 0.0
-                self.office.cam_overload_timer = 0.0
-                self.set_status("POWER OUTAGE.")
+                self.set_status("POWER OUTAGE - EMERGENCY MODE ACTIVE")
                 self.static_intensity = 0.8
                 self.screen_shake = 3
+                self.log_event("EMERGENCY: Backup power engaged!")
+        
+        # Emergency mode countdown
+        if self.power.outage and self.power.emergency_mode:
+            self.power.emergency_timer -= dt
+            if self.power.emergency_timer <= 0:
+                self.power.emergency_mode = False
+                self.set_status("BACKUP POWER DEPLETED")
+                # After emergency mode, animatronics get more aggressive
+                for anim in self.animatronics:
+                    anim.mood = "hunting"
+                    anim.hunting_mode = True
+                    anim.hunting_timer = 30
+                    anim.adaptive_aggro += 0.3
             return
 
-        # Camera heat and overload
-        if self.office.cam_overload_timer > 0:
-            self.office.cam_overload_timer = max(0, self.office.cam_overload_timer - dt)
-        if self.office.cams_open:
-            self.office.cam_heat = min(100.0, self.office.cam_heat + 18.0 * dt)
-            if self.office.cam_heat >= 100.0:
-                self.office.cam_heat = 100.0
-                self.office.cams_open = False
-                self.office.cam_overload_timer = 8.0
-                self.office.cam_flash = 1.0
-                self.set_status("CAMERAS OVERHEATED!")
-                self.log_event("Cameras overheated")
-                self.overload_grace_timer = max(self.overload_grace_timer, 3.0)
-        else:
-            self.office.cam_heat = max(0.0, self.office.cam_heat - 12.0 * dt)
+        # Camera power drain (no heat mechanic - cameras just drain power when open)
+        # Power drain happens in the power system update below
 
         # Scale drain based on night length - gentler scaling
         # Default is 60 seconds/hour, scale from 0.7 to 1.3 across the range
@@ -1113,11 +1437,17 @@ class Game:
 
             # Win condition: reached 6 AM (6 hours after 12:00)
             if self.game_state.minutes_elapsed >= 6 * 60:
+                self.calculate_performance_score()
                 self.game_state.state = "win"
-                self.set_status(f"6 AM! You survived Night {self.game_state.night}!")
+                self.determine_ending()
                 self.assets.play_sound("bell_6am")
                 self.assets.stop_music()
 
+                # Save high score if it's better
+                night_key = self.game_state.night
+                if night_key not in self.high_scores or self.performance_score > self.high_scores[night_key]:
+                    self.high_scores[night_key] = self.performance_score
+                
                 if (self.game_state.night < 5 and
                         self.game_state.night + 1 > self.game_state.max_night_unlocked):
                     self.game_state.max_night_unlocked = self.game_state.night + 1
@@ -1156,8 +1486,8 @@ class Game:
                         self.office.door_right_health = max(0.0, self.office.door_right_health - pressure * dt)
                         if self.office.door_right_health <= 0 and self.office.door_right_jam_timer <= 0:
                             self.break_door("right")
-                    # If blocked too long in hallway, force a retreat
-                    if anim.hallway_block_timer >= 2.5:
+                    # If blocked too long, they get frustrated and leave temporarily (realistic behavior)
+                    if anim.hallway_block_timer >= 3.0:
                         neighbors = [r for r in get_neighbors("Hallway") if r != "Office"]
                         if neighbors:
                             anim.last_room = anim.room
@@ -1165,7 +1495,7 @@ class Game:
                             anim.target_x, anim.target_y = room_position(anim.room, WINDOW_WIDTH, WINDOW_HEIGHT)
                             anim.x = anim.target_x
                             anim.y = anim.target_y
-                            anim.retreat_timer = 4.0
+                            anim.retreat_timer = 8.0  # Increased retreat time
                             anim.retreat_target = anim.room
                             anim.hallway_block_timer = 0.0
                 else:
@@ -1196,7 +1526,8 @@ class Game:
             # Check if animatronic was blocked by a door
             anim.get_blocked_side(self.office)
             # Check if animatronic should attack (windup required)
-            if anim.room == "Office" and anim.try_attack(self.office):
+            # But only if player isn't hiding!
+            if anim.room == "Office" and anim.try_attack(self.office) and not self.current_safe_spot:
                 anim.attack_windup += dt
                 required = max(0.45, (anim.attack_windup_required / max(0.8, self.difficulty)) - (self.game_state.night - 1) * 0.1)
                 if anim.attack_windup >= required:
@@ -1204,6 +1535,8 @@ class Game:
                     self.jumpscare.active = True
                     self.jumpscare.timer = 0
                     self.game_state.state = "jumpscare"
+                    self.add_screen_shake(15, 2.0)
+                    self.add_color_overlay((255, 0, 0, 150), 2.0)
                     self.assets.play_sound("jumpscare")
                     self.assets.stop_music()
                     self.log_event(f"{anim.name} attacked")
@@ -1245,6 +1578,8 @@ class Game:
                             anim.attack_side = "left"
         
         # Pack hunting behavior: multiple animatronics moving together
+        if not hasattr(self, 'coordination_timer'):
+            self.coordination_timer = 0
         at_office = [a for a in self.animatronics if a.room == "Office"]
         if self.coordination_timer > 0:
             self.coordination_timer -= dt
@@ -1255,6 +1590,265 @@ class Game:
                 anim.adaptive_aggro += 0.10
                 anim.block_count += 1  # simulate frustration from failed attacks
             self.coordination_timer = 12.0
+    
+    def update_environmental_events(self, dt):
+        """Trigger random environmental events to add variety and tension"""
+        self.environmental_event_timer += dt
+        
+        # Trigger events at random intervals
+        if self.environmental_event_timer >= self.next_event_time:
+            self.trigger_random_event()
+            self.environmental_event_timer = 0
+            self.next_event_time = self.rng.uniform(20, 45)  # Next event in 20-45 seconds
+        
+        # Update light flickering
+        if self.game_state.lights_flickering:
+            self.game_state.flicker_timer += dt
+            if self.game_state.flicker_timer >= self.rng.uniform(2, 4):
+                self.game_state.lights_flickering = False
+                self.game_state.flicker_timer = 0
+        
+        # Update hallucination mode
+        if self.hallucination_timer > 0:
+            self.hallucination_timer -= dt
+            if self.hallucination_timer <= 0:
+                self.hallucination_mode = False
+    
+    def trigger_random_event(self):
+        """Trigger a random environmental event"""
+        events = [
+            "lights_flicker",
+            "temperature_drop",
+            "phantom_sound",
+            "camera_glitch",
+            "ventilation_block",
+            "power_surge",
+            "hallucination",
+            "door_malfunction"
+        ]
+        
+        # Weight events based on night and current situation
+        night = self.game_state.night
+        minutes = self.game_state.minutes_elapsed
+        
+        # More intense events on later nights
+        if night >= 3:
+            events.extend(["power_drain", "system_overload"])
+        if night >= 4:
+            events.extend(["blackout_threat", "animatronic_rush"])
+        
+        event = self.rng.choice(events)
+        
+        if event == "lights_flicker":
+            self.game_state.lights_flickering = True
+            self.game_state.flicker_timer = 0
+            self.add_screen_shake(3, 0.3)
+            self.add_color_overlay((255, 255, 200, 80), 0.5)
+            self.log_event("Lights flickering...")
+        
+        elif event == "temperature_drop":
+            self.game_state.temperature -= self.rng.randint(5, 15)
+            self.add_color_overlay((100, 150, 255, 60), 2.0)
+            if self.game_state.temperature < 50:
+                self.log_event("Temperature critical!")
+                # Cold affects animatronic behavior (slower but more aggressive)
+                for anim in self.animatronics:
+                    anim.move_interval *= 1.2
+                    anim.adaptive_aggro += 0.1
+            else:
+                self.log_event(f"Temperature dropped to {self.game_state.temperature}°F")
+        
+        elif event == "phantom_sound":
+            fake_rooms = ["Cafeteria", "Hallway", "Gym", "Library", "Bathrooms"]
+            fake_room = self.rng.choice(fake_rooms)
+            self.game_state.phantom_sounds.append({
+                'location': fake_room,
+                'time': time.time(),
+                'type': 'phantom'
+            })
+            self.log_event(f"Strange noise from {fake_room}")
+        
+        elif event == "camera_glitch":
+            if self.office.cams_open:
+                self.office.cam_flash = 1.5
+                self.add_screen_shake(5, 0.4)
+                # Create static particles
+                for _ in range(15):
+                    x = self.rng.randint(0, self.game_state.width)
+                    y = self.rng.randint(0, self.game_state.height)
+                    self.add_particle_burst(x, y, 3, (200, 200, 255), (0.5, 2))
+                self.log_event("Camera system glitching!")
+        
+        elif event == "ventilation_block":
+            if not self.game_state.ventilation_blocked:
+                self.game_state.ventilation_blocked = True
+                self.log_event("Ventilation blocked - power drain increased!")
+                self.power.base_drain *= 1.3
+        
+        elif event == "power_surge":
+            surge_amount = self.rng.uniform(5, 15)
+            self.power.current = max(0, self.power.current - surge_amount)
+            self.add_screen_shake(8, 0.5)
+            self.add_color_overlay((255, 255, 100, 120), 0.3)
+            # Electric sparks
+            for _ in range(20):
+                x = self.rng.randint(0, self.game_state.width)
+                y = self.rng.randint(0, 100)
+                self.add_particle_burst(x, y, 5, (255, 255, 100), (2, 5))
+            self.log_event(f"Power surge! Lost {int(surge_amount)}% power")
+        
+        elif event == "hallucination":
+            if night >= 3:
+                self.hallucination_mode = True
+                self.hallucination_timer = self.rng.uniform(10, 20)
+                self.add_color_overlay((180, 100, 255, 100), 15.0)
+                self.add_screen_shake(2, 15.0)
+                self.log_event("You feel disoriented...")
+        
+        elif event == "door_malfunction":
+            if self.rng.random() < 0.5:
+                self.office.door_left_health = max(20, self.office.door_left_health - 25)
+                self.log_event("Left door malfunctioning!")
+            else:
+                self.office.door_right_health = max(20, self.office.door_right_health - 25)
+                self.log_event("Right door malfunctioning!")
+        
+        elif event == "power_drain" and night >= 3:
+            # Gradual power drain over time
+            drain_amount = self.rng.uniform(2, 5)
+            self.power.current = max(0, self.power.current - drain_amount)
+            self.log_event("Unusual power drain detected")
+        
+        elif event == "animatronic_rush" and night >= 4:
+            # All animatronics become aggressive temporarily
+            for anim in self.animatronics:
+                anim.mood = "aggressive"
+                anim.hunting_mode = True
+                anim.hunting_timer = self.rng.uniform(15, 25)
+                anim.hunt_target_room = "Office"
+            self.add_screen_shake(6, 1.0)
+            self.add_color_overlay((255, 50, 50, 100), 2.0)
+            self.log_event("WARNING: Unusual activity detected!")
+    
+    def update_phantom_sounds(self, dt):
+        """Update and clean up phantom sound events"""
+        current_time = time.time()
+        self.game_state.phantom_sounds = [
+            sound for sound in self.game_state.phantom_sounds
+            if current_time - sound['time'] < 5  # Remove after 5 seconds
+        ]
+    
+    def calculate_performance_score(self):
+        """Calculate player performance score for the night"""
+        score = 1000  # Base score
+        
+        # Bonus for efficient power usage
+        power_efficiency = (self.power.current / self.power.max) * 100
+        score += int(power_efficiency * 2)
+        
+        # Penalty for excessive door usage
+        score -= (self.total_door_closes * 5)
+        
+        # Bonus for camera usage (awareness)
+        score += min(self.total_camera_checks * 10, 300)
+        
+        # Bonus for perfect blocks
+        score += (self.perfect_blocks * 50)
+        
+        # Penalty for failed blocks
+        score -= (self.failed_blocks * 30)
+        
+        # Night multiplier
+        score = int(score * (1.0 + (self.game_state.night - 1) * 0.25))
+        
+        # Difficulty multiplier
+        score = int(score * self.difficulty)
+        
+        self.performance_score = max(0, score)
+    
+    def determine_ending(self):
+        """Determine the ending based on performance and night"""
+        night = self.game_state.night
+        score = self.performance_score
+        power_left = self.power.current
+        
+        if night == 5 and score >= 2000:
+            self.set_status("6 AM! PERFECT NIGHT - You've mastered survival!")
+            self.game_state.ending_type = "perfect"
+        elif night == 5:
+            self.set_status("6 AM! You survived all nights - VICTORY!")
+            self.game_state.ending_type = "victory"
+        elif power_left > 50 and score >= 1500:
+            self.set_status(f"6 AM! Flawless performance on Night {night}!")
+            self.game_state.ending_type = "flawless"
+        elif power_left < 10:
+            self.set_status(f"6 AM! You barely made it through Night {night}...")
+            self.game_state.ending_type = "barely"
+        else:
+            self.set_status(f"6 AM! You survived Night {night}!")
+            self.game_state.ending_type = "standard"
+    
+
+    def update_threat_assessment(self, dt):
+        """Calculate real-time threat level 0-100"""
+        threat = 0
+        
+        # Animatronics in office or hallway = major threat
+        for anim in self.animatronics:
+            if anim.room == "Office":
+                threat += 30
+            elif anim.room == "Hallway":
+                threat += 15
+            elif anim._distance_to_room(anim.room, "Office") <= 2:
+                threat += 8
+        
+        # Low power = threat
+        if self.power.current < 20:
+            threat += 20
+        elif self.power.current < 50:
+            threat += 10
+        
+        # Door health = threat
+        avg_door_health = (self.office.door_left_health + self.office.door_right_health) / 2
+        if avg_door_health < 30:
+            threat += 15
+        
+        # Both doors open = vulnerability
+        if not self.office.door_left_closed and not self.office.door_right_closed:
+            threat += 10
+        
+        # Emergency mode = maximum threat
+        if self.power.outage and self.power.emergency_mode:
+            threat += 30
+        
+        self.threat_level = min(100, threat)
+    
+    def update_audio_system(self, dt):
+        """Update footstep sounds and audio cues"""
+        current_time = time.time()
+        
+        # Clean up old footsteps
+        self.footstep_sounds = [
+            sound for sound in self.footstep_sounds
+            if current_time - sound['time'] < 3
+        ]
+        
+        # Add footsteps for moving animatronics
+        for anim in self.animatronics:
+            if anim.room != anim.last_room:
+                # Animatronic moved!
+                if anim.special_ability != "silent_stalker":
+                    self.footstep_sounds.append({
+                        'name': anim.name,
+                        'location': anim.room,
+                        'time': current_time,
+                        'intensity': anim.adaptive_aggro
+                    })
+                    
+                    # Log if close enough
+                    if anim._distance_to_room(anim.room, "Office") <= 2:
+                        direction = "nearby" if anim.room == "Hallway" else anim.room
+                        self.log_event(f"Footsteps from {direction}", True)
 
     def update(self, dt):
         """Main update loop"""
@@ -1281,7 +1875,13 @@ class Game:
             self.update_power(dt)
             self.update_time(dt)
             self.update_animatronics(dt)
+            self.update_environmental_events(dt)
+            self.update_phantom_sounds(dt)
+            self.update_screen_effects(dt)
+            self.update_threat_assessment(dt)
+            self.update_audio_system(dt)
         elif self.game_state.state == "jumpscare":
+            self.update_screen_effects(dt)
             self.jumpscare.timer += dt
             if self.jumpscare.timer > self.jumpscare.duration:
                 self.jumpscare.timer = self.jumpscare.duration
@@ -1483,9 +2083,9 @@ class Game:
         self.screen.blit(title_text, title_rect)
         
         # Content lines
-        content_lines = slide["text"].split("\\n")
+        content_lines = slide["text"].split("\n")
         y_offset = int(self.game_state.height * 0.35)
-        line_spacing = int(self.game_state.height * 0.12)
+        line_spacing = int(self.game_state.height * 0.06)  # Reduced spacing for more lines
         
         for line in content_lines:
             line_text = self.font_medium.render(line, True, (220, 220, 220))
@@ -1533,13 +2133,14 @@ class Game:
         else:
             self.screen.fill((12, 12, 12))
 
-    def get_anim_sprite(self, name):
+    def get_anim_sprite(self, name, is_attacking=False):
         """Get sprite for animatronic"""
         sprites = {
-            "Mr Ingles": "anim_mr_ingles",
+            "Mr Ingles": "anim_scary_ingles" if is_attacking else "anim_mr_ingles",
+            "Scary Mr Ingles": "anim_scary_ingles",
             "Janitor Bot": "anim_janitor",
             "Librarian": "anim_librarian",
-            "Vent Crawler": "anim_vent",
+            "Vent Crawler": "anim_vent_crawler",
         }
         sprite_name = sprites.get(name, "mr_ingles_office")
         return self.assets.get_image(sprite_name)
@@ -1619,7 +2220,7 @@ class Game:
     def draw_camera_feed(self):
         """Draw camera feed"""
         cam_name = self.cameras.current_camera()
-        cam_key = f"cam_{cam_name.lower()}"
+        cam_key = f"cam_{cam_name.lower().replace(' ', '_')}"
         cam_img = self.assets.get_image(cam_key)
 
         # Camera background
@@ -1717,11 +2318,8 @@ class Game:
         door_text = self.font_small.render(f"{left_label}  |  {right_label}", True, (200, 200, 200))
         self.screen.blit(door_text, (30, self.game_state.height - 25))
 
-        cam_heat = int(self.office.cam_heat + 0.5)
-        cam_label = f"CAM HEAT: {cam_heat}%"
-        if self.office.cam_overload_timer > 0:
-            cam_label += f"  OVERLOAD {int(self.office.cam_overload_timer + 0.5)}s"
-        cam_text = self.font_small.render(cam_label, True, (200, 200, 200))
+        # Camera status display
+        cam_text = self.font_small.render("CAM SYSTEM", True, (200, 200, 200))
         self.screen.blit(cam_text, (30, self.game_state.height - 70))
 
         # Power usage breakdown
@@ -1768,23 +2366,66 @@ class Game:
             pygame.draw.rect(self.screen, status_color, (text_rect.x - 20, text_rect.y - 10,
                              text_rect.width + 40, text_rect.height + 20), 2)
             self.screen.blit(status_text, text_rect)
+        
+        # Emergency mode indicator
+        if self.power.outage and self.power.emergency_mode:
+            emergency_time = int(self.power.emergency_timer)
+            emergency_text = self.font_large.render(f"BACKUP POWER: {emergency_time}s", True, (255, 150, 0))
+            emergency_rect = emergency_text.get_rect(center=(self.game_state.width // 2, int(self.game_state.height * 0.15)))
+            # Pulsing effect
+            pulse = math.sin(time.time() * 5) * 0.3 + 0.7
+            emergency_surf = pygame.Surface((emergency_rect.width + 60, emergency_rect.height + 30))
+            emergency_surf.set_alpha(int(180 * pulse))
+            emergency_surf.fill((100, 50, 0))
+            self.screen.blit(emergency_surf, (emergency_rect.x - 30, emergency_rect.y - 15))
+            self.screen.blit(emergency_text, emergency_rect)
+        
+        # Hallucination mode indicator
+        if self.hallucination_mode:
+            halluc_text = self.font_small.render("Vision blurred...", True, (150, 150, 255))
+            halluc_rect = halluc_text.get_rect(center=(self.game_state.width // 2, int(self.game_state.height * 0.92)))
+            self.screen.blit(halluc_text, halluc_rect)
+        
+        # NEW FEATURES HUD
+        # Flashlight battery indicator
+        battery = int(self.office.flashlight_battery)
+        battery_color = (255, 50, 50) if battery < 20 else (255, 200, 0) if battery < 50 else (100, 255, 100)
+        battery_text = self.font_small.render(f"BATTERY: {battery}%", True, battery_color)
+        self.screen.blit(battery_text, (30, self.game_state.height - 90))
+        
+        # Threat level indicator
+        threat_color = (255, 50, 50) if self.threat_level > 70 else (255, 200, 0) if self.threat_level > 40 else (100, 255, 100)
+        threat_text = self.font_small.render(f"THREAT: {int(self.threat_level)}%", True, threat_color)
+        self.screen.blit(threat_text, (self.game_state.width - 150, self.game_state.height - 160))
+        
+        # Noise makers
+        noise_text = self.font_small.render(f"NOISE MAKERS: {self.office.noise_maker_charges}", True, (200, 200, 255))
+        self.screen.blit(noise_text, (self.game_state.width - 200, self.game_state.height - 180))
+        
+        # Barricade levels
+        if self.office.barricade_left > 0 or self.office.barricade_right > 0:
+            barricade_text = self.font_small.render(f"BARRICADES: L{self.office.barricade_left} R{self.office.barricade_right}", True, (200, 255, 200))
+            self.screen.blit(barricade_text, (self.game_state.width - 230, self.game_state.height - 200))
+        
+        # Combo counter
+        if self.combo_blocks > 0:
+            combo_text = self.font_large.render(f"COMBO x{self.combo_blocks}!", True, (255, 255, 100))
+            combo_rect = combo_text.get_rect(center=(self.game_state.width // 2, int(self.game_state.height * 0.20)))
+            self.screen.blit(combo_text, combo_rect)
+        
+        # Safe spot indicator
+        if self.current_safe_spot:
+            safe_time = int(self.safe_spot_duration)
+            safe_text = self.font_medium.render(f"HIDING IN {self.current_safe_spot.upper()} - {safe_time}s", True, (100, 255, 100))
+            safe_rect = safe_text.get_rect(center=(self.game_state.width // 2, int(self.game_state.height * 0.50)))
+            self.screen.blit(safe_text, safe_rect)
 
         # Controls help moved to above (door integrity display replaced it)
         # Draw minimap when not using cameras
         if not self.office.cams_open:
             self.draw_minimap()
 
-        # Threat meters
-        meter_x = self.game_state.width - 250
-        meter_y = self.game_state.height - 140
-        for i, anim in enumerate(self.animatronics):
-            dist = anim._distance_to_room(anim.room, "Office")
-            threat = max(0.0, 1.0 - (dist / 4.0))
-            bar_w = int(120 * threat)
-            label = self.font_small.render(anim.name, True, (200, 200, 200))
-            self.screen.blit(label, (meter_x, meter_y + i * 18))
-            pygame.draw.rect(self.screen, (80, 80, 80), (meter_x + 90, meter_y + i * 18 + 4, 120, 8))
-            pygame.draw.rect(self.screen, (255, 80, 80), (meter_x + 90, meter_y + i * 18 + 4, bar_w, 8))
+        # Threat meters removed for better suspense
 
         # Night progress bar
         progress = min(1.0, self.game_state.minutes_elapsed / 360.0)
@@ -1794,15 +2435,6 @@ class Game:
         pygame.draw.rect(self.screen, (80, 200, 120), (bar_x, bar_y, int(300 * progress), 10))
         pygame.draw.rect(self.screen, (120, 120, 120), (bar_x, bar_y, 300, 10), 1)
 
-        # Event log
-        log_x = self.game_state.width - 320
-        log_y = 20
-        log_title = self.font_small.render("EVENT LOG", True, (180, 200, 220))
-        self.screen.blit(log_title, (log_x, log_y))
-        for i, entry in enumerate(self.event_log):
-            text = self.font_small.render(entry, True, (180, 180, 180))
-            self.screen.blit(text, (log_x, log_y + 18 + i * 16))
-
         # Controls overlay (toggle H)
         if self.show_controls:
             cx = 20
@@ -1810,14 +2442,19 @@ class Game:
             lines = [
                 "CONTROLS",
                 "Q/E: Doors",
-                "F: Light",
+                "F: Flashlight",
                 "TAB: Cameras",
                 "1-6: Switch Cam",
-                "H: Toggle HUD Help",
+                "--- NEW ABILITIES ---",
+                "B: Barricade Door",
+                "N: Noise Maker",
+                "V: Ventilation",
+                "C: Safe Spot",
+                "H: Toggle Help",
                 "ESC/P: Pause",
             ]
             for i, line in enumerate(lines):
-                txt = self.font_small.render(line, True, (170, 200, 220) if i == 0 else (150, 180, 200))
+                txt = self.font_small.render(line, True, (170, 200, 220) if i == 0 or i == 5 else (150, 180, 200))
                 self.screen.blit(txt, (cx, cy + i * 16))
 
     def draw_menu(self):
@@ -2030,7 +2667,7 @@ class Game:
         self.jumpscare.zoom = ease
 
         self.screen.fill((0, 0, 0))
-        sprite = self.get_anim_sprite(self.jumpscare.killer)
+        sprite = self.get_anim_sprite(self.jumpscare.killer, is_attacking=True)
         if sprite:
             base_scale = 0.6 * (self.game_state.width / 1280)
             scale = base_scale * (1.0 + 2.2 * self.jumpscare.zoom)
@@ -2055,7 +2692,9 @@ class Game:
                 jumpscare_surface.fill((255, 20, 20))
                 self.screen.blit(jumpscare_surface, (0, 0))
 
-            jumpscare_text = self.font_large.render(f"{self.jumpscare.killer} GOT YOU!", True, (255, 255, 255))
+            # Determine jumpscare message
+            jumpscare_msg = "MR. INGLES GOT YOU!" if self.jumpscare.killer == "Scary Mr Ingles" else f"{self.jumpscare.killer} GOT YOU!"
+            jumpscare_text = self.font_large.render(jumpscare_msg, True, (255, 255, 255))
             jumpscare_rect = jumpscare_text.get_rect(center=(self.game_state.width // 2,
                 int(self.game_state.height * 0.3)))
             self.screen.blit(jumpscare_text, jumpscare_rect)
@@ -2098,24 +2737,54 @@ class Game:
         # Survived message
         survived_text = self.font_large.render(f"Night {self.game_state.night} Survived!", True, (200, 255, 200))
         survived_rect = survived_text.get_rect(center=(self.game_state.width // 2, 
-            int(self.game_state.height * 0.45)))
+            int(self.game_state.height * 0.40)))
         self.screen.blit(survived_text, survived_rect)
+        
+        # Performance score and stats
+        score_text = self.font_medium.render(f"Performance Score: {self.performance_score}", True, (255, 255, 150))
+        score_rect = score_text.get_rect(center=(self.game_state.width // 2, int(self.game_state.height * 0.50)))
+        self.screen.blit(score_text, score_rect)
+        
+        # Ending type message
+        ending_type = getattr(self.game_state, 'ending_type', 'standard')
+        ending_messages = {
+            'perfect': "★ PERFECT PERFORMANCE ★",
+            'victory': "All Nights Completed!",
+            'flawless': "Flawless Victory!",
+            'barely': "Close Call...",
+            'standard': "Well Done!"
+        }
+        ending_text = self.font_medium.render(ending_messages.get(ending_type, "Well Done!"), True, (255, 255, 100))
+        ending_rect = ending_text.get_rect(center=(self.game_state.width // 2, int(self.game_state.height * 0.56)))
+        self.screen.blit(ending_text, ending_rect)
         
         # Celebration text for final night
         if self.game_state.night == 5:
             special_text = self.font_medium.render("🎉 YOU BEAT THE GAME! 🎉", True, (255, 255, 100))
-            special_rect = special_text.get_rect(center=(self.game_state.width // 2, int(self.game_state.height * 0.55)))
+            special_rect = special_text.get_rect(center=(self.game_state.width // 2, int(self.game_state.height * 0.63)))
             pygame.draw.rect(self.screen, (80, 80, 0), (special_rect.x - 20, special_rect.y - 10,
                              special_rect.width + 40, special_rect.height + 20), 0)
             pygame.draw.rect(self.screen, (255, 255, 100), (special_rect.x - 20, special_rect.y - 10,
                              special_rect.width + 40, special_rect.height + 20), 2)
             self.screen.blit(special_text, special_rect)
+        
+        # High score display
+        night_key = self.game_state.night
+        if night_key in self.high_scores:
+            high_score = self.high_scores[night_key]
+            hs_y = int(self.game_state.height * 0.70) if self.game_state.night != 5 else int(self.game_state.height * 0.72)
+            if self.performance_score >= high_score:
+                hs_text = self.font_small.render(f"NEW HIGH SCORE!", True, (255, 255, 100))
+            else:
+                hs_text = self.font_small.render(f"High Score: {high_score}", True, (200, 200, 150))
+            hs_rect = hs_text.get_rect(center=(self.game_state.width // 2, hs_y))
+            self.screen.blit(hs_text, hs_rect)
 
         # Restart instructions
         restart_text = self.font_medium.render("[R] Next Night  |  [M] Menu",
             True, (200, 255, 200))
-        restart_rect = restart_text.get_rect(center=(self.game_state.width // 2,
-            int(self.game_state.height * 0.70)))
+        restart_y = int(self.game_state.height * 0.78) if night_key in self.high_scores else int(self.game_state.height * 0.70)
+        restart_rect = restart_text.get_rect(center=(self.game_state.width // 2, restart_y))
         self.screen.blit(restart_text, restart_rect)
 
     def draw(self):
@@ -2153,6 +2822,12 @@ class Game:
         self.draw_background()
         self.draw_anims()
         self.draw_hud()
+        
+        # Draw particles
+        self.draw_particles()
+        
+        # Apply color overlay
+        self.apply_color_overlay()
         
         # Apply creepy effects
         if self.static_intensity > 0:
@@ -2210,6 +2885,13 @@ class Game:
                 self.office.door_left_closed = True
                 self.office.door_left_health = max(0, self.office.door_left_health - 6)
                 sound = "door_close"
+                self.total_door_closes += 1
+                # Check if this was a perfect block
+                if any(a.room == "Hallway" and a.attack_side == "left" for a in self.animatronics):
+                    self.perfect_blocks += 1
+                    self.combo_blocks += 1
+                    self.combo_timer = 5.0  # 5 seconds to chain
+                    self.add_screen_shake(2, 0.2)
             self.assets.play_sound(sound)
         elif side == "right":
             if self.office.door_right_closed:
@@ -2224,6 +2906,13 @@ class Game:
                 self.office.door_right_closed = True
                 self.office.door_right_health = max(0, self.office.door_right_health - 6)
                 sound = "door_close"
+                self.total_door_closes += 1
+                # Check if this was a perfect block
+                if any(a.room == "Hallway" and a.attack_side == "right" for a in self.animatronics):
+                    self.perfect_blocks += 1
+                    self.combo_blocks += 1
+                    self.combo_timer = 5.0  # 5 seconds to chain
+                    self.add_screen_shake(2, 0.2)
             self.assets.play_sound(sound)
 
     def toggle_flashlight(self):
@@ -2237,12 +2926,10 @@ class Game:
         """Toggle camera view"""
         if self.power.outage:
             return
-        if self.office.cam_overload_timer > 0:
-            self.set_status("Cameras overheated!")
-            return
         self.office.cams_open = not self.office.cams_open
         if self.office.cams_open:
             self.office.cam_flash = 1.0
+            self.total_camera_checks += 1
         else:
             pass  # No static loop needed in this version
 
@@ -2252,16 +2939,123 @@ class Game:
             self.cameras.switch(index)
             if self.office.cams_open:
                 self.office.cam_flash = 1.0
+    
+    def use_barricade(self):
+        """Reinforce doors with barricades"""
+        if self.power.current < 15:
+            self.set_status("Not enough power for barricade!")
+            return
+        
+        # Toggle which side to barricade based on which door is weaker
+        if self.office.door_left_health < self.office.door_right_health:
+            if self.office.barricade_left < 3:
+                self.office.barricade_left += 1
+                self.office.door_left_health = min(100, self.office.door_left_health + 25)
+                self.power.current = max(0, self.power.current - 10)
+                self.log_event(f"Left door barricaded (Lvl {self.office.barricade_left})")
+                self.add_screen_shake(3, 0.3)
+            else:
+                self.set_status("Left door fully barricaded!")
+        else:
+            if self.office.barricade_right < 3:
+                self.office.barricade_right += 1
+                self.office.door_right_health = min(100, self.office.door_right_health + 25)
+                self.power.current = max(0, self.power.current - 10)
+                self.log_event(f"Right door barricaded (Lvl {self.office.barricade_right})")
+                self.add_screen_shake(3, 0.3)
+            else:
+                self.set_status("Right door fully barricaded!")
+    
+    def use_noise_maker(self):
+        """Create audio distraction to lure animatronics away"""
+        if self.office.noise_maker_charges <= 0:
+            self.set_status("No noise makers left!")
+            return
+        
+        if self.audio_distraction_cooldown > 0:
+            self.set_status(f"Noise maker cooling down: {int(self.audio_distraction_cooldown)}s")
+            return
+        
+        self.office.noise_maker_charges -= 1
+        self.audio_distraction_cooldown = 15
+        
+        # Find animatronics near office and move them away
+        distracted = 0
+        for anim in self.animatronics:
+            if anim.room in ["Office", "Hallway"] and self.rng.random() < 0.7:
+                # Lure them to a random room
+                lure_rooms = ["Cafeteria", "Gym", "Bathrooms", "Library"]
+                anim.room = self.rng.choice(lure_rooms)
+                anim.target_x, anim.target_y = room_position(anim.room, WINDOW_WIDTH, WINDOW_HEIGHT)
+                distracted += 1
+        
+        if distracted > 0:
+            self.log_event(f"Distracted {distracted} animatronic(s)!")
+            self.add_screen_shake(2, 0.5)
+            self.add_color_overlay((100, 255, 100, 80), 1.0)
+        else:
+            self.log_event("Noise maker deployed (no effect)")
+    
+    def toggle_vent_system(self):
+        """Toggle ventilation to reduce camera heat"""
+        if self.power.current < 5:
+            self.set_status("Not enough power for ventilation!")
+            return
+        
+        self.office.vent_system_active = not self.office.vent_system_active
+        
+        if self.office.vent_system_active:
+            self.log_event("Ventilation system ON")
+            self.power.base_drain += 0.05  # Small power cost
+        else:
+            self.log_event("Ventilation system OFF")
+            self.power.base_drain = max(0.16, self.power.base_drain - 0.05)
+    
+    def use_safe_spot(self):
+        """Hide in a safe spot temporarily"""
+        if self.current_safe_spot:
+            self.set_status("Already in safe spot!")
+            return
+        
+        if not self.safe_spots_available:
+            self.set_status("No safe spots available!")
+            return
+        
+        # Can only use if threat is high enough
+        if self.threat_level < 50:
+            self.set_status("Not dangerous enough to hide!")
+            return
+        
+        # Choose random safe spot
+        spot = self.rng.choice(self.safe_spots_available)
+        self.current_safe_spot = spot
+        self.safe_spot_duration = 8.0  # 8 seconds of safety
+        self.safe_spots_available.remove(spot)
+        
+        self.log_event(f"Hiding in {spot}!")
+        self.add_color_overlay((50, 50, 50, 200), 8.0)
+        
+        # Animatronics lose track temporarily
+        for anim in self.animatronics:
+            if anim.room == "Office":
+                anim.room = "Hallway"
+                anim.target_x, anim.target_y = room_position("Hallway", WINDOW_WIDTH, WINDOW_HEIGHT)
 
     def handle_input(self):
         """Handle all input"""
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 self.running = False
+            elif event.type == pygame.VIDEORESIZE:
+                # Handle window resize
+                self.window_width = event.w
+                self.window_height = event.h
+                self.screen = pygame.display.set_mode((event.w, event.h), pygame.RESIZABLE)
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 # Menu slider handling
                 if self.game_state.state == "menu":
-                    mx, my = event.pos
+                    # Scale mouse position to game coordinates
+                    mx, my = self.scale_mouse_pos(event.pos)
                     slider_width = 420
                     slider_x = (self.game_state.width - slider_width) // 2
                     slider_y = int(self.game_state.height * 0.82)
@@ -2280,7 +3074,7 @@ class Game:
 
                 # Handle minimap clicks when playing
                 if self.game_state.state == "playing":
-                    clicked_room = self.get_clicked_room(event.pos)
+                    clicked_room = self.get_clicked_room(self.scale_mouse_pos(event.pos))
                     if clicked_room:
                         # Find camera index for this room
                         try:
@@ -2300,13 +3094,13 @@ class Game:
                     self.dragging_difficulty = False
             elif event.type == pygame.MOUSEMOTION:
                 if self.dragging_slider and self.game_state.state == "menu":
-                    mx, my = event.pos
+                    mx, my = self.scale_mouse_pos(event.pos)
                     slider_width = 420
                     slider_x = (self.game_state.width - slider_width) // 2
                     t = (mx - slider_x) / slider_width
                     self.game_state.seconds_per_hour = self.clamp(self.slider_min + t * (self.slider_max - self.slider_min), self.slider_min, self.slider_max)
                 if self.dragging_difficulty and self.game_state.state == "menu":
-                    mx, my = event.pos
+                    mx, my = self.scale_mouse_pos(event.pos)
                     slider_width = 420
                     slider_x = (self.game_state.width - slider_width) // 2
                     t = (mx - slider_x) / slider_width
@@ -2365,6 +3159,14 @@ class Game:
                         self.switch_camera(4)
                     elif key == "6":
                         self.switch_camera(5)
+                    elif key == "b":
+                        self.use_barricade()
+                    elif key == "n":
+                        self.use_noise_maker()
+                    elif key == "v":
+                        self.toggle_vent_system()
+                    elif key == "c":
+                        self.use_safe_spot()
                     elif key in ("escape", "p"):
                         self.game_state.state = "paused"
 
@@ -2407,14 +3209,20 @@ class Game:
     # =====================================================
 
     def run(self):
-        """Main game loop"""
+        """Main game loop - Optimized for 60 FPS"""
         while self.running:
             dt = self.clock.tick(FPS) / 1000.0
+            
+            # Skip heavy updates if running slow
+            if dt > 0.033:  # More than 30ms per frame
+                dt = 0.033  # Cap dt to prevent spiral of death
 
             self.handle_input()
             self.update(dt)
             self.draw()
 
+            # Scale render surface to window with aspect ratio preservation
+            self.scale_and_blit_to_screen()
             pygame.display.flip()
 
         pygame.quit()

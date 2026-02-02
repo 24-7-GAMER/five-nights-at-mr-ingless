@@ -3232,7 +3232,10 @@ class Game:
         for anim in self.animatronics:
             # Set them to hunt the lure location
             anim.hunt_target_room = room
-            anim.hunting_timer = 8.0  # Hunt for 8 seconds
+            # Each animatronic has different time based on their traits
+            # Base duration: 5-12 seconds, influenced by sound_sensitivity and patience
+            base_duration = 6.0 + (anim.sound_sensitivity * 3.0) + (anim.patience * 2.0)
+            anim.hunting_timer = min(12.0, max(5.0, base_duration))
             anim.hunting_mode = True
             anim.mood = "hunting"
             lured += 1

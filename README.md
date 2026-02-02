@@ -5,6 +5,32 @@
 
 # ✅ CONVERSION COMPLETE: Lua → Python
 
+---
+
+## 🎮 Quick Start (Works Everywhere!)
+
+### Windows
+1. **Option A (Easiest)**: Double-click `FIVE_NIGHTS_AT_MR_INGLES/run.bat`
+2. **Option B**: Double-click `FIVE_NIGHTS_AT_MR_INGLES/launch.py`
+3. **Option C (Manual)**: Open terminal in `FIVE_NIGHTS_AT_MR_INGLES/` and run:
+   ```
+   python launch.py
+   ```
+
+### Mac / Linux / Unix
+1. **Option A (Easiest)**: Open terminal in `FIVE_NIGHTS_AT_MR_INGLES/` and run:
+   ```
+   bash run.sh
+   ```
+2. **Option B**: 
+   ```
+   python3 launch.py
+   ```
+
+**Note**: `run.sh` works as-is - **no `chmod +x` needed!**
+
+---
+
 ## Project Summary
 
 **Five Nights at Mr Ingles's** has been **completely rewritten** from LOVE2D/Lua to **Pygame/Python**.
@@ -20,20 +46,22 @@
 | **Code Structure** | Procedural | Object-Oriented (9 classes) | ✅ Improved |
 | **AI System** | Basic pathfinding | Advanced learning with mood & coordination | ✅ Cutting-edge |
 | **Documentation** | Basic | Comprehensive | ✅ Enhanced |
+| **Cross-Platform** | Platform-specific scripts | Universal launcher | ✅ Works Everywhere |
 
 ---
 
 ## Files Created
 
 ```
-✅ main.py                  → Complete Python game (1,712 lines)
+✅ main.py                  → Complete Python game (3,547 lines)
+✅ launch.py                → Universal launcher (works on all platforms)
 ✅ requirements.txt         → Dependency management
 ✅ README_PYTHON.md         → User documentation
 ✅ CONVERSION_REPORT.md     → Detailed technical report
 ✅ AI_FEATURES.md           → Advanced AI system documentation
 ✅ CHANGELOG.md             → Latest updates and changes
-✅ run.bat                  → Windows launcher
-✅ run.sh                   → Unix/Linux/Mac launcher
+✅ run.bat                  → Windows launcher (simplified)
+✅ run.sh                   → Unix/Linux/Mac launcher (no chmod +x needed)
 ```
 
 ---

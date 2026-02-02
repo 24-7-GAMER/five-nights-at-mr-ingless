@@ -6,7 +6,14 @@ LUA -> PYTHON PORT (this took 6 way too long)
 
 import sys
 import os
-os.chdir(os.path.dirname(os.path.abspath(__file__)))
+
+# =====================================================
+# CROSS-PLATFORM PATH HANDLING
+# =====================================================
+# Define BASE_DIR for all asset loading - works on Windows, Mac, Linux
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+os.chdir(BASE_DIR)
+
 import subprocess
 
 def install_required_packages():
@@ -43,7 +50,7 @@ WINDOW_WIDTH = 1280
 WINDOW_HEIGHT = 720
 WINDOW_TITLE = "Five Nights at Mr Ingles's"
 FPS = 60
-SAVE_FILE = "mr_ingles_save.json"
+SAVE_FILE = os.path.join(BASE_DIR, "mr_ingles_save.json")
 
 # =====================================================
 # GAME STATE
@@ -596,9 +603,10 @@ class AssetManager:
 
     def load_image(self, name, path):
         """Safely load an image"""
-        if os.path.exists(path):
+        full_path = os.path.join(BASE_DIR, path)
+        if os.path.exists(full_path):
             try:
-                self.images[name] = pygame.image.load(path).convert_alpha()
+                self.images[name] = pygame.image.load(full_path).convert_alpha()
                 return self.images[name]
             except:
                 return None
@@ -606,9 +614,10 @@ class AssetManager:
 
     def load_sound(self, name, path):
         """Safely load a sound"""
-        if os.path.exists(path):
+        full_path = os.path.join(BASE_DIR, path)
+        if os.path.exists(full_path):
             try:
-                self.sounds[name] = pygame.mixer.Sound(path)
+                self.sounds[name] = pygame.mixer.Sound(full_path)
                 return self.sounds[name]
             except:
                 return None
@@ -616,11 +625,12 @@ class AssetManager:
 
     def load_music(self, name, path):
         """Safely load music"""
-        if os.path.exists(path):
+        full_path = os.path.join(BASE_DIR, path)
+        if os.path.exists(full_path):
             try:
                 # For streaming music, we'll use pygame.mixer.music
-                self.music[name] = path
-                return path
+                self.music[name] = full_path
+                return full_path
             except:
                 return None
         return None

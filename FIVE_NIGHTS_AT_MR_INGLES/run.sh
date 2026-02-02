@@ -1,34 +1,17 @@
 #!/bin/bash
-# Five Nights at Mr Ingles's - Python Launcher (Unix/Linux/Mac)
-# This script sets up and runs the game on Unix-like systems.
-# What this does:
-#  - checks for Python 3 on PATH
-#  - ensures Pygame is installed (installs via pip using requirements.txt)
-#  - runs `python3 main.py`
+# Five Nights at Mr Ingles's - Cross-Platform Launcher
+# Works on Mac, Linux, and Unix systems
+# Simply run: bash run.sh (no chmod +x needed!)
 
-echo "========================================"
-echo "Five Nights at Mr Ingles's (Python)"
-echo "========================================"
-echo ""
+cd "$(dirname "$0")" || exit 1
 
-# Check if Python is installed
-if ! command -v python3 &> /dev/null; then
-    echo "ERROR: Python 3 is not installed"
+# Try to find python3, then python
+if command -v python3 &> /dev/null; then
+    python3 launch.py
+elif command -v python &> /dev/null; then
+    python launch.py
+else
+    echo "ERROR: Python is not installed or not in PATH"
     echo "Please install Python 3.7+ and try again"
     exit 1
 fi
-
-echo "Checking dependencies..."
-python3 -c "import pygame" 2>/dev/null
-if [ $? -ne 0 ]; then
-    echo "Installing Pygame..."
-    pip3 install -r requirements.txt
-    if [ $? -ne 0 ]; then
-        echo "ERROR: Failed to install dependencies"
-        exit 1
-    fi
-fi
-
-echo ""
-echo "Starting game..."
-python3 main.py

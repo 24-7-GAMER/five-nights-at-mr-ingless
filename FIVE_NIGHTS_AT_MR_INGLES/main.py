@@ -14,11 +14,14 @@ import os
 # Handle PyInstaller bundle (executable) vs. script execution
 if getattr(sys, 'frozen', False):
     # Running as PyInstaller bundle
-    BASE_DIR = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
-    if hasattr(sys, '_MEIPASS'):
-        print("🎮 Running as PyInstaller bundle")
+    BASE_DIR = getattr(sys, '_MEIPASS', None)
+    if BASE_DIR is None:
+        # Fallback if _MEIPASS doesn't exist (shouldn't happen with PyInstaller)
+        BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+        print("⚠️  Warning: Running as frozen app but _MEIPASS not found")
+        print(f"   Using fallback directory: {BASE_DIR}")
     else:
-        print("⚠️  Running as frozen app but _MEIPASS not found, using script directory")
+        print("🎮 Running as PyInstaller bundle")
 else:
     # Running as normal Python script
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))

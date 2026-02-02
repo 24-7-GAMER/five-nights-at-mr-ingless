@@ -183,13 +183,7 @@ def build_executable():
                     icns_path,
                 ])
         
-        # Add macOS-specific pygame fix
-        pyinstaller_args.extend([
-            "--osx-entitlements-file",
-            "entitlements.plist",
-        ])
-        
-        # Create entitlements.plist for pygame compatibility
+        # Create entitlements.plist for pygame compatibility (must be created BEFORE adding to args)
         entitlements_content = """<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -203,6 +197,12 @@ def build_executable():
         with open("entitlements.plist", "w") as f:
             f.write(entitlements_content)
         print("✓ Created macOS entitlements file for pygame compatibility")
+        
+        # Add macOS-specific pygame fix (after creating the file)
+        pyinstaller_args.extend([
+            "--osx-entitlements-file",
+            "entitlements.plist",
+        ])
     
     try:
         print(f"\nRunning PyInstaller...\n")

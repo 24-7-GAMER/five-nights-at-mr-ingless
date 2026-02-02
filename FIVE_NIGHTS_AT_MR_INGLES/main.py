@@ -11,8 +11,28 @@ import os
 # CROSS-PLATFORM PATH HANDLING
 # =====================================================
 # Define BASE_DIR for all asset loading - works on Windows, Mac, Linux
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-os.chdir(BASE_DIR)
+# Handle PyInstaller bundle (executable) vs. script execution
+if getattr(sys, 'frozen', False):
+    # Running as PyInstaller bundle
+    BASE_DIR = getattr(sys, '_MEIPASS', None)
+    if BASE_DIR is None:
+        # Fallback if _MEIPASS doesn't exist (shouldn't happen with PyInstaller)
+        BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+        print("⚠️  Warning: Running as frozen app but _MEIPASS not found")
+        print(f"   Using fallback directory: {BASE_DIR}")
+    else:
+        print("🎮 Running as PyInstaller bundle")
+else:
+    # Running as normal Python script
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    print("🐍 Running as Python script")
+
+# Change working directory to BASE_DIR for relative path support
+try:
+    os.chdir(BASE_DIR)
+except (OSError, PermissionError) as e:
+    print(f"⚠️  Warning: Could not change to BASE_DIR ({BASE_DIR}): {e}")
+    print(f"   Continuing with current directory: {os.getcwd()}")
 
 import subprocess
 

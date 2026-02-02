@@ -54,6 +54,50 @@ def check_pillow():
             print(f"⚠ Could not install Pillow - building without icon: {e}")
             return False
 
+def create_icns_from_png(png_path, icns_path):
+    """Convert PNG to ICNS format for macOS"""
+    try:
+        from PIL import Image
+        img = Image.open(png_path)
+        
+        # Create iconset directory
+        iconset_dir = "icon.iconset"
+        os.makedirs(iconset_dir, exist_ok=True)
+        
+        # Generate all required sizes for macOS
+        sizes = [16, 32, 64, 128, 256, 512, 1024]
+        for size in sizes:
+            # Standard resolution
+            resized = img.resize((size, size), Image.Resampling.LANCZOS)
+            resized.save(f"{iconset_dir}/icon_{size}x{size}.png")
+            
+            # Retina resolution (except 1024)
+            if size <= 512:
+                retina_size = size * 2
+                resized_retina = img.resize((retina_size, retina_size), Image.Resampling.LANCZOS)
+                resized_retina.save(f"{iconset_dir}/icon_{size}x{size}@2x.png")
+        
+        # Convert iconset to icns using macOS tool
+        result = subprocess.run(
+            ["iconutil", "-c", "icns", iconset_dir, "-o", icns_path],
+            capture_output=True,
+            text=True
+        )
+        
+        # Clean up iconset directory
+        shutil.rmtree(iconset_dir, ignore_errors=True)
+        
+        if result.returncode == 0 and os.path.exists(icns_path):
+            print(f"✓ Created macOS icon: {icns_path}")
+            return True
+        else:
+            print(f"⚠ iconutil failed: {result.stderr}")
+            return False
+            
+    except Exception as e:
+        print(f"⚠ Could not create .icns file: {e}")
+        return False
+
 def build_executable():
     """Build the executable for current platform"""
     system, ext = get_platform_info()
@@ -95,21 +139,69 @@ def build_executable():
         "./build",
         "--add-data",
         f"assets{os.pathsep}assets",  # Include assets folder
+        # Hidden imports for pygame (especially important for macOS)
+        "--hidden-import",
+        "pygame",
+        "--hidden-import",
+        "pygame.mixer",
+        "--hidden-import",
+        "pygame.font",
+        "--hidden-import",
+        "pygame.time",
+        "--hidden-import",
+        "pygame.display",
+        "--hidden-import",
+        "pygame.image",
+        "--hidden-import",
+        "pygame.transform",
+        "--collect-all",
+        "pygame",
         "main.py"
     ]
     
     # Platform-specific options
     if system == "Windows" and has_pillow:
-        # Only add icon if Pillow is available
+        # Use title.png for Windows icon
         pyinstaller_args.extend([
             "--icon",
-            "assets/img/office.png",  # Window icon
+            "assets/img/title.png",
         ])
     elif system == "macOS":
+        # macOS bundle configuration
         pyinstaller_args.extend([
             "--osx-bundle-identifier",
             "com.fiveninghtsatmringles.game",
         ])
+        
+        # Create .icns icon from title.png if possible
+        if has_pillow and os.path.exists("assets/img/title.png"):
+            icns_path = "app_icon.icns"
+            if create_icns_from_png("assets/img/title.png", icns_path):
+                pyinstaller_args.extend([
+                    "--icon",
+                    icns_path,
+                ])
+        
+        # Add macOS-specific pygame fix
+        pyinstaller_args.extend([
+            "--osx-entitlements-file",
+            "entitlements.plist",
+        ])
+        
+        # Create entitlements.plist for pygame compatibility
+        entitlements_content = """<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+    <true/>
+    <key>com.apple.security.cs.disable-library-validation</key>
+    <true/>
+</dict>
+</plist>"""
+        with open("entitlements.plist", "w") as f:
+            f.write(entitlements_content)
+        print("✓ Created macOS entitlements file for pygame compatibility")
     
     try:
         print(f"\nRunning PyInstaller...\n")
@@ -137,11 +229,19 @@ def build_executable():
                 print(f"  Double-click: {output_file}")
                 print(f"  Or run: .\\{output_name}.exe")
             elif system == "macOS":
-                print(f"  Double-click: {output_file}/{output_name}.app")
-                print(f"  Or run: open {output_file}/{output_name}.app")
+                print(f"  Double-click: {output_file}")
+                print(f"  Or run: open {output_file}")
             elif system == "Linux":
                 print(f"  Run: ./{output_file}")
                 print(f"  Or: chmod +x {output_file} && ./{output_file}")
+            
+            # Cleanup temporary files
+            if system == "macOS":
+                if os.path.exists("entitlements.plist"):
+                    os.remove("entitlements.plist")
+                    print("\n✓ Cleaned up temporary files")
+                if os.path.exists("app_icon.icns"):
+                    os.remove("app_icon.icns")
             
             print(f"\nNote: The 'dist' folder can be shared with others on the same platform!")
             print(f"They can run the game without Python installed.\n")

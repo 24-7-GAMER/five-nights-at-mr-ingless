@@ -14,13 +14,22 @@ import os
 # Handle PyInstaller bundle (executable) vs. script execution
 if getattr(sys, 'frozen', False):
     # Running as PyInstaller bundle
-    BASE_DIR = sys._MEIPASS
+    BASE_DIR = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
+    if hasattr(sys, '_MEIPASS'):
+        print("🎮 Running as PyInstaller bundle")
+    else:
+        print("⚠️  Running as frozen app but _MEIPASS not found, using script directory")
 else:
     # Running as normal Python script
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    print("🐍 Running as Python script")
 
 # Change working directory to BASE_DIR for relative path support
-os.chdir(BASE_DIR)
+try:
+    os.chdir(BASE_DIR)
+except (OSError, PermissionError) as e:
+    print(f"⚠️  Warning: Could not change to BASE_DIR ({BASE_DIR}): {e}")
+    print(f"   Continuing with current directory: {os.getcwd()}")
 
 import subprocess
 

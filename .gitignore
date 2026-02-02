@@ -33,7 +33,8 @@ env/
 *~
 
 # Game save files
-*.json
+mr_ingles_save.json
+*_save.json
 
 # OS
 .DS_Store

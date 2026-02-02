@@ -11,7 +11,15 @@ import os
 # CROSS-PLATFORM PATH HANDLING
 # =====================================================
 # Define BASE_DIR for all asset loading - works on Windows, Mac, Linux
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+# Handle PyInstaller bundle (executable) vs. script execution
+if getattr(sys, 'frozen', False):
+    # Running as PyInstaller bundle
+    BASE_DIR = sys._MEIPASS
+else:
+    # Running as normal Python script
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# Change working directory to BASE_DIR for relative path support
 os.chdir(BASE_DIR)
 
 import subprocess

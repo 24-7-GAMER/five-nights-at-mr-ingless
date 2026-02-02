@@ -604,36 +604,51 @@ class AssetManager:
     def load_image(self, name, path):
         """Safely load an image"""
         full_path = os.path.join(BASE_DIR, path)
-        if os.path.exists(full_path):
+        if not os.path.exists(full_path):
+            print(f"⚠️  WARNING: Image not found: {full_path}")
+            return None
+        try:
+            img = pygame.image.load(full_path)
+            # Try convert_alpha, fall back to original if it fails
             try:
-                self.images[name] = pygame.image.load(full_path).convert_alpha()
-                return self.images[name]
-            except:
-                return None
-        return None
+                img = img.convert_alpha()
+            except Exception as e:
+                print(f"⚠️  Note: convert_alpha() failed for {name}, using raw image: {e}")
+            self.images[name] = img
+            return img
+        except Exception as e:
+            print(f"❌ ERROR loading image {name}: {e}")
+            print(f"   Path: {full_path}")
+            return None
 
     def load_sound(self, name, path):
         """Safely load a sound"""
         full_path = os.path.join(BASE_DIR, path)
-        if os.path.exists(full_path):
-            try:
-                self.sounds[name] = pygame.mixer.Sound(full_path)
-                return self.sounds[name]
-            except:
-                return None
-        return None
+        if not os.path.exists(full_path):
+            print(f"⚠️  WARNING: Sound not found: {full_path}")
+            return None
+        try:
+            sound = pygame.mixer.Sound(full_path)
+            self.sounds[name] = sound
+            return sound
+        except Exception as e:
+            print(f"❌ ERROR loading sound {name}: {e}")
+            print(f"   Path: {full_path}")
+            return None
 
     def load_music(self, name, path):
         """Safely load music"""
         full_path = os.path.join(BASE_DIR, path)
-        if os.path.exists(full_path):
-            try:
-                # For streaming music, we'll use pygame.mixer.music
-                self.music[name] = full_path
-                return full_path
-            except:
-                return None
-        return None
+        if not os.path.exists(full_path):
+            print(f"⚠️  WARNING: Music not found: {full_path}")
+            return None
+        try:
+            self.music[name] = full_path
+            return full_path
+        except Exception as e:
+            print(f"❌ ERROR loading music {name}: {e}")
+            print(f"   Path: {full_path}")
+            return None
 
     def load_all_assets(self):
         """Load all game assets"""
@@ -736,8 +751,7 @@ class Game:
         self.window_height = WINDOW_HEIGHT
         # Render to this surface at fixed resolution, then scale to screen
         self.render_surface = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT))
-        # Temporarily swap so all existing code renders to render_surface
-        self.screen, self.render_surface = self.render_surface, self.screen
+        # NOTE: Screen swap moved to AFTER asset loading (see below)
 
         # Game components
         self.game_state = GameState()
@@ -877,7 +891,16 @@ class Game:
         ]
 
         # Load everything
+        print(f"📁 BASE_DIR: {BASE_DIR}")
+        print(f"📁 Assets path: {os.path.join(BASE_DIR, 'assets')}")
+        print("🎮 Loading assets...")
         self.assets.load_all_assets()
+        print("✅ Assets loaded")
+        
+        # NOW do the screen swap (after assets are loaded so convert_alpha() works)
+        self.screen, self.render_surface = self.render_surface, self.screen
+        print("🖥️  Rendering surface initialized")
+        
         self.load_save()
 
         if self.game_state.state == "menu":

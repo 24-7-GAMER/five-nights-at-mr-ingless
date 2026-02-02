@@ -122,7 +122,7 @@ def build_executable():
     print(f"Building executable...")
     
     # PyInstaller command
-    output_name = "FiveNightsAtMrIngles"
+    output_name = "Five Nights At Mr Ingles's"
     
     # Basic PyInstaller options that work on all platforms
     pyinstaller_args = [
@@ -160,12 +160,13 @@ def build_executable():
     ]
     
     # Platform-specific options
-    if system == "Windows" and has_pillow:
+    if system == "Windows":
         # Use title.png for Windows icon
-        pyinstaller_args.extend([
-            "--icon",
-            "assets/img/title.png",
-        ])
+        if os.path.exists("assets/img/title.png"):
+            pyinstaller_args.extend([
+                "--icon",
+                "assets/img/title.png",
+            ])
     elif system == "macOS":
         # macOS bundle configuration
         pyinstaller_args.extend([
@@ -207,15 +208,15 @@ def build_executable():
         print(f"\nRunning PyInstaller...\n")
         subprocess.run(pyinstaller_args, check=True)
         
-        # Determine output file path
+        # Determine output file path (PyInstaller sanitizes special characters)
         if system == "Windows":
-            output_file = f"dist/{output_name}.exe"
+            output_file = f"dist/Five Nights At Mr Ingles's.exe"
         elif system == "macOS":
-            output_file = f"dist/{output_name}.app"
+            output_file = f"dist/Five Nights At Mr Ingles's.app"
         elif system == "Linux":
-            output_file = f"dist/{output_name}"
+            output_file = f"dist/Five Nights At Mr Ingles's"
         else:
-            output_file = f"dist/{output_name}"
+            output_file = f"dist/Five Nights At Mr Ingles's"
         
         if os.path.exists(output_file):
             print(f"\n{'='*60}")

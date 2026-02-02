@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Five Nights at Mr Ingles's (Pygame)
-Faithful port of the LOVE2D game to Python
+LUA -> PYTHON PORT (this took 6 way too long)
 """
 
 import sys

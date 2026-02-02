@@ -100,6 +100,13 @@ class GameState:
         self.temperature = 70  # Room temperature affects mechanics
         self.ventilation_blocked = False
         self.phantom_sounds = []
+        
+        # Visual Effects
+        self.chromatic_aberration = 0.0  # RGB split effect
+        self.screen_distortion = 0.0  # Wave distortion
+        self.vhs_effect = 0.0  # VHS tracking lines
+        self.glow_intensity = 0.0  # Dynamic bloom/glow
+        self.scan_line_offset = 0.0  # Animated scanlines
 
     def elapsed_time(self):
         """Get elapsed time since game start"""
@@ -1355,15 +1362,42 @@ class Game:
             particle['life'] -= dt
             if particle['life'] <= 0:
                 self.particles.remove(particle)
+        
+        # Update visual effects based on game state
+        self.game_state.scan_line_offset = (self.game_state.scan_line_offset + dt * 30) % self.game_state.height
+        
+        # Chromatic aberration increases when stressed
+        stress_level = 0.0
+        if self.power.current < 30:
+            stress_level += 0.3
+        if self.power.outage:
+            stress_level += 0.5
+        if any(a.room in ["West Hall", "East Hall"] for a in self.animatronics):
+            stress_level += 0.2
+        
+        self.game_state.chromatic_aberration = stress_level
+        self.game_state.vhs_effect = 0.3 + stress_level * 0.5
+        self.game_state.glow_intensity = 0.2 + math.sin(time.time() * 0.5) * 0.1
     
     def draw_particles(self):
-        """Draw all active particles"""
+        """Draw all active particles with enhanced visuals"""
         for particle in self.particles:
             alpha = int(255 * particle['life'])
             color = particle['color'][:3]
             size = max(1, int(particle['size'] * particle['life']))
             pos = (int(particle['x']), int(particle['y']))
-            pygame.draw.circle(self.screen, color, pos, size)
+            
+            # Glow effect for particles
+            if particle.get('glow', True):
+                glow_size = size + 3
+                glow_surface = pygame.Surface((glow_size * 2, glow_size * 2), pygame.SRCALPHA)
+                pygame.draw.circle(glow_surface, (*color, alpha // 3), (glow_size, glow_size), glow_size)
+                self.screen.blit(glow_surface, (pos[0] - glow_size, pos[1] - glow_size))
+            
+            # Main particle
+            particle_surface = pygame.Surface((size * 2, size * 2), pygame.SRCALPHA)
+            pygame.draw.circle(particle_surface, (*color, alpha), (size, size), size)
+            self.screen.blit(particle_surface, (pos[0] - size, pos[1] - size))
     
     def apply_screen_shake(self):
         """Get screen shake offset"""
@@ -1380,6 +1414,77 @@ class Game:
             overlay.set_alpha(self.color_overlay[3] if len(self.color_overlay) > 3 else 128)
             overlay.fill(self.color_overlay[:3])
             self.screen.blit(overlay, (0, 0))
+    
+    def apply_chromatic_aberration(self, intensity=1.0):
+        """Apply RGB split effect for horror atmosphere"""
+        if intensity <= 0:
+            return
+        
+        offset = int(3 * intensity)
+        if offset <= 0:
+            return
+        
+        # Create RGB channels with offsets
+        screen_copy = self.screen.copy()
+        red_surf = pygame.Surface((self.game_state.width, self.game_state.height))
+        green_surf = pygame.Surface((self.game_state.width, self.game_state.height))
+        blue_surf = pygame.Surface((self.game_state.width, self.game_state.height))
+        
+        # Extract and shift channels
+        red_surf.blit(screen_copy, (-offset, 0))
+        green_surf.blit(screen_copy, (0, 0))
+        blue_surf.blit(screen_copy, (offset, 0))
+        
+        # Blend with channel isolation
+        self.screen.fill((0, 0, 0))
+        red_surf.set_colorkey((0, 0, 0))
+        red_surf.set_alpha(255)
+        self.screen.blit(red_surf, (0, 0), special_flags=pygame.BLEND_ADD)
+        
+    def apply_vhs_effect(self, intensity=1.0):
+        """Apply VHS tracking lines and distortion"""
+        if intensity <= 0:
+            return
+        
+        # VHS tracking lines (horizontal distortion lines)
+        for i in range(int(8 * intensity)):
+            y = int((self.game_state.scan_line_offset + i * 90) % self.game_state.height)
+            line_height = 2 + int(intensity)
+            alpha = int(40 * intensity)
+            
+            line_surf = pygame.Surface((self.game_state.width, line_height))
+            line_surf.set_alpha(alpha)
+            line_surf.fill((0, 0, 0))
+            self.screen.blit(line_surf, (0, y))
+        
+        # Random horizontal glitch lines
+        if self.rng.random() < 0.1 * intensity:
+            glitch_y = self.rng.randint(0, self.game_state.height - 10)
+            glitch_width = self.rng.randint(100, 400)
+            glitch_x = self.rng.randint(0, self.game_state.width - glitch_width)
+            glitch_surf = pygame.Surface((glitch_width, 3))
+            glitch_surf.set_alpha(80)
+            glitch_surf.fill((255, 255, 255))
+            self.screen.blit(glitch_surf, (glitch_x, glitch_y))
+    
+    def apply_screen_glow(self, intensity=1.0):
+        """Apply dynamic screen glow/bloom effect"""
+        if intensity <= 0:
+            return
+        
+        # Create glow overlay with radial gradient
+        glow_surf = pygame.Surface((self.game_state.width, self.game_state.height), pygame.SRCALPHA)
+        center_x = self.game_state.width // 2
+        center_y = self.game_state.height // 2
+        max_radius = int(((self.game_state.width ** 2 + self.game_state.height ** 2) ** 0.5) / 2)
+        
+        for i in range(0, max_radius, 20):
+            alpha = int(30 * intensity * (1 - i / max_radius))
+            if alpha > 0:
+                color = (255, 255, 200, alpha)
+                pygame.draw.circle(glow_surf, color, (center_x, center_y), max_radius - i, 20)
+        
+        self.screen.blit(glow_surf, (0, 0))
 
     def update_office_effects(self, dt):
         """Update office visual effects"""
@@ -2382,22 +2487,32 @@ class Game:
             dim_surface.fill((0, 0, 0))
             self.screen.blit(dim_surface, (0, 0))
         
-        # Flashlight brightness boost - bright white overlay when light is on
+        # Flashlight brightness boost - bright white overlay when light is on with dynamic pulse
         if self.office.light_on:
+            pulse = math.sin(time.time() * 2) * 0.15 + 0.85
             brightness_boost = pygame.Surface((self.game_state.width, self.game_state.height))
-            brightness_boost.set_alpha(80)  # Strong brightness boost
-            brightness_boost.fill((255, 255, 255))
+            brightness_boost.set_alpha(int(80 * pulse))  # Pulsing brightness boost
+            brightness_boost.fill((255, 255, 200))  # Slight warm tint
             self.screen.blit(brightness_boost, (0, 0))
 
-        # Vignette
-        for i in range(1, 7):
-            alpha = int(255 * 0.05 * i)
-            vignette = pygame.Surface((self.game_state.width, self.game_state.height))
-            vignette.set_alpha(alpha)
-            vignette.fill((0, 0, 0))
-            pygame.draw.rect(vignette, (0, 0, 0), (10 * i, 10 * i,
-                self.game_state.width - 20 * i, self.game_state.height - 20 * i), 1)
-            self.screen.blit(vignette, (0, 0))
+        # Simple edge vignette (no spiral)
+        vignette_surf = pygame.Surface((self.game_state.width, self.game_state.height), pygame.SRCALPHA)
+        
+        # Darken edges with simple rectangles
+        edge_width = 150
+        for i in range(edge_width):
+            alpha = int(80 * (1 - i / edge_width) ** 2)
+            if alpha > 0:
+                # Top and bottom
+                pygame.draw.line(vignette_surf, (0, 0, 0, alpha), (0, i), (self.game_state.width, i))
+                pygame.draw.line(vignette_surf, (0, 0, 0, alpha), (0, self.game_state.height - i - 1), 
+                               (self.game_state.width, self.game_state.height - i - 1))
+                # Left and right
+                pygame.draw.line(vignette_surf, (0, 0, 0, alpha), (i, 0), (i, self.game_state.height))
+                pygame.draw.line(vignette_surf, (0, 0, 0, alpha), (self.game_state.width - i - 1, 0), 
+                               (self.game_state.width - i - 1, self.game_state.height))
+        
+        self.screen.blit(vignette_surf, (0, 0))
 
     def draw_office_view(self):
         """Draw office view with animatronics"""
@@ -2438,12 +2553,31 @@ class Game:
         cam_text = self.font_medium.render(f"CAM: {cam_name}", True, (0, 255, 255))
         self.screen.blit(cam_text, (20, 20))
 
-        # Scanlines overlay - subtle and dim
-        for y in range(0, self.game_state.height, 8):
-            scanline = pygame.Surface((self.game_state.width, 1))
-            scanline.set_alpha(20)  # very subtle
-            scanline.fill((0, 200, 200))
+        # Enhanced animated scanlines with CRT effect
+        scan_offset = int(time.time() * 50) % 4
+        for y in range(scan_offset, self.game_state.height, 4):
+            scanline_alpha = 15 + int(5 * math.sin(y * 0.1 + time.time() * 2))
+            scanline = pygame.Surface((self.game_state.width, 2))
+            scanline.set_alpha(scanline_alpha)
+            scanline.fill((0, 180, 200))
             self.screen.blit(scanline, (0, y))
+        
+        # CRT curvature effect (edge darkening)
+        crt_surf = pygame.Surface((self.game_state.width, self.game_state.height), pygame.SRCALPHA)
+        edge_width = 100
+        for i in range(edge_width):
+            alpha = int(100 * (1 - i / edge_width) ** 2)
+            # Left and right edges
+            pygame.draw.line(crt_surf, (0, 0, 0, alpha), (i, 0), (i, self.game_state.height))
+            pygame.draw.line(crt_surf, (0, 0, 0, alpha), 
+                           (self.game_state.width - i - 1, 0), 
+                           (self.game_state.width - i - 1, self.game_state.height))
+            # Top and bottom edges
+            pygame.draw.line(crt_surf, (0, 0, 0, alpha), (0, i), (self.game_state.width, i))
+            pygame.draw.line(crt_surf, (0, 0, 0, alpha), 
+                           (0, self.game_state.height - i - 1), 
+                           (self.game_state.width, self.game_state.height - i - 1))
+        self.screen.blit(crt_surf, (0, 0))
 
         # Static flash overlay
         if self.office.cam_flash > 0:
@@ -2474,20 +2608,49 @@ class Game:
             self.draw_office_view()
 
     def draw_hud(self):
-        """Draw heads-up display"""
-        # Power indicator with bar
+        """Draw heads-up display with enhanced visual effects"""
+        # Power indicator with bar and glow
         power_val = int(self.power.current + 0.5)
         power_color = (255, 50, 50) if power_val <= 20 else (100, 255, 100) if power_val > 50 else (255, 200, 0)
         
-        # Power bar background
+        # Power bar background with gradient
         bar_width = 200
         bar_height = 20
-        pygame.draw.rect(self.screen, (40, 40, 40), (20, self.game_state.height - 50, bar_width, bar_height))
-        pygame.draw.rect(self.screen, power_color, (20, self.game_state.height - 50, 
-                         int(bar_width * power_val / 100), bar_height))
-        pygame.draw.rect(self.screen, (150, 150, 150), (20, self.game_state.height - 50, bar_width, bar_height), 2)
+        bar_x, bar_y = 20, self.game_state.height - 50
         
-        # Power text with dark background for contrast
+        # Outer glow for power bar
+        if power_val <= 20:
+            glow_surf = pygame.Surface((bar_width + 20, bar_height + 10), pygame.SRCALPHA)
+            pulse = math.sin(time.time() * 5) * 0.3 + 0.7
+            pygame.draw.rect(glow_surf, (*power_color, int(80 * pulse)), (0, 0, bar_width + 20, bar_height + 10), border_radius=5)
+            self.screen.blit(glow_surf, (bar_x - 10, bar_y - 5))
+        
+        pygame.draw.rect(self.screen, (40, 40, 40), (bar_x, bar_y, bar_width, bar_height), border_radius=3)
+        
+        # Gradient fill for power bar
+        filled_width = int(bar_width * power_val / 100)
+        for i in range(filled_width):
+            ratio = i / max(1, filled_width)
+            if power_val <= 20:
+                # Red gradient when low
+                r = int(255 - ratio * 50)
+                g = int(50 + ratio * 30)
+                b = 50
+            elif power_val > 50:
+                # Green gradient when high
+                r = int(100 - ratio * 20)
+                g = int(255 - ratio * 50)
+                b = int(100 - ratio * 20)
+            else:
+                # Yellow gradient when medium
+                r = 255
+                g = int(200 - ratio * 50)
+                b = 0
+            pygame.draw.line(self.screen, (r, g, b), (bar_x + i, bar_y), (bar_x + i, bar_y + bar_height))
+        
+        pygame.draw.rect(self.screen, (150, 150, 150), (bar_x, bar_y, bar_width, bar_height), 2, border_radius=3)
+        
+        # Power text with dark background for contrast and glow
         power_text = self.font_small.render(f"POWER: {power_val}%", True, (255, 255, 255))
         power_rect = power_text.get_rect(topleft=(30, self.game_state.height - 47))
         pygame.draw.rect(self.screen, (0, 0, 0), (power_rect.x - 3, power_rect.y - 2, power_rect.width + 6, power_rect.height + 4))
@@ -2947,47 +3110,107 @@ class Game:
         self.apply_creepy_static(0.05)
 
     def draw_jumpscare(self):
-        """Draw jumpscare screen"""
+        """Draw jumpscare screen with enhanced effects"""
         t = self.jumpscare.timer
         fly_t = min(1.0, t / self.jumpscare.fly_duration)
         ease = 1 - (1 - fly_t) * (1 - fly_t)
         self.jumpscare.zoom = ease
 
         self.screen.fill((0, 0, 0))
+        
+        # Add extreme chromatic aberration during jumpscare
+        aberration_intensity = 1.0 + self.jumpscare.zoom * 2.0
+        
         sprite = self.get_anim_sprite(self.jumpscare.killer, is_attacking=True)
         if sprite:
             base_scale = 0.6 * (self.game_state.width / 1280)
             scale = base_scale * (1.0 + 2.2 * self.jumpscare.zoom)
+            
+            # Add shake to jumpscare sprite
+            shake_x = int(self.rng.uniform(-8, 8) * self.jumpscare.zoom)
+            shake_y = int(self.rng.uniform(-8, 8) * self.jumpscare.zoom)
+            
             scaled = pygame.transform.scale(sprite,
                 (int(sprite.get_width() * scale), int(sprite.get_height() * scale)))
-            rect = scaled.get_rect(center=(self.game_state.width // 2,
-                int(self.game_state.height * (0.55 - 0.25 * self.jumpscare.zoom))))
+            rect = scaled.get_rect(center=(self.game_state.width // 2 + shake_x,
+                int(self.game_state.height * (0.55 - 0.25 * self.jumpscare.zoom)) + shake_y))
             self.screen.blit(scaled, rect)
         else:
             size = int(80 + 320 * self.jumpscare.zoom)
             pygame.draw.circle(self.screen, (200, 200, 200),
                                (self.game_state.width // 2, self.game_state.height // 2), size)
 
-        # After the fly-in, flood red
+        # Enhanced red flash effect with dramatic gradient
         if t >= self.jumpscare.fly_duration:
-            intensity = 0.7 + 0.3 * math.sin((t - self.jumpscare.fly_duration) * 15)
-            self.screen.fill((int(100 * intensity), 0, 0))
+            # Draw radial gradient from dark to red
+            time_offset = (t - self.jumpscare.fly_duration) * 2
+            pulse_intensity = 0.7 + 0.3 * math.sin(time_offset * 7.5)
+            
+            # Vertical gradient background
+            for y in range(self.game_state.height):
+                ratio = y / self.game_state.height
+                # Dark red to bright red gradient
+                r = int((80 + 175 * ratio) * pulse_intensity)
+                g = int((0 + 20 * ratio) * pulse_intensity)
+                b = int((0 + 20 * ratio) * pulse_intensity)
+                pygame.draw.line(self.screen, (r, g, b), (0, y), (self.game_state.width, y))
+            
+            # Add radial overlay for more depth
+            center_x = self.game_state.width // 2
+            center_y = int(self.game_state.height * 0.4)
+            max_radius = int(((self.game_state.width ** 2 + self.game_state.height ** 2) ** 0.5) / 2)
+            
+            radial_surf = pygame.Surface((self.game_state.width, self.game_state.height), pygame.SRCALPHA)
+            for i in range(0, max_radius, 30):
+                distance_ratio = i / max_radius
+                alpha = int(120 * (distance_ratio ** 1.5) * pulse_intensity)
+                if alpha > 0:
+                    color_intensity = int(200 - distance_ratio * 150)
+                    pygame.draw.circle(radial_surf, (color_intensity, 0, 0, min(alpha, 255)), 
+                                     (center_x, center_y), max_radius - i, 30)
+            self.screen.blit(radial_surf, (0, 0))
+            
+            # Multiple pulsing layers for more intensity
             for i in range(3):
-                alpha = int(255 * (0.3 + 0.4 * math.sin((t - self.jumpscare.fly_duration) * (20 + i * 5))))
+                alpha = int(255 * (0.2 + 0.3 * math.sin(time_offset * (10 + i * 3))))
                 jumpscare_surface = pygame.Surface((self.game_state.width, self.game_state.height))
                 jumpscare_surface.set_alpha(alpha)
-                jumpscare_surface.fill((255, 20, 20))
+                # Vary colors slightly for depth
+                jumpscare_surface.fill((255, 20 + i * 15, 10 + i * 10))
                 self.screen.blit(jumpscare_surface, (0, 0))
+            
+            # Add glitch bars
+            if int(t * 30) % 3 == 0:
+                for _ in range(self.rng.randint(3, 8)):
+                    glitch_y = self.rng.randint(0, self.game_state.height)
+                    glitch_height = self.rng.randint(2, 20)
+                    glitch_surf = pygame.Surface((self.game_state.width, glitch_height))
+                    glitch_surf.set_alpha(self.rng.randint(100, 200))
+                    glitch_surf.fill((255, 0, 0))
+                    self.screen.blit(glitch_surf, (0, glitch_y))
 
             # Determine jumpscare message
             jumpscare_msg = "MR. INGLES GOT YOU!" if self.jumpscare.killer == "Scary Mr Ingles" else f"{self.jumpscare.killer} GOT YOU!"
+            
+            # Glitchy text effect
+            text_shake_x = int(self.rng.uniform(-5, 5))
+            text_shake_y = int(self.rng.uniform(-5, 5))
+            
             jumpscare_text = self.font_large.render(jumpscare_msg, True, (255, 255, 255))
-            jumpscare_rect = jumpscare_text.get_rect(center=(self.game_state.width // 2,
-                int(self.game_state.height * 0.3)))
+            jumpscare_rect = jumpscare_text.get_rect(center=(self.game_state.width // 2 + text_shake_x,
+                int(self.game_state.height * 0.3) + text_shake_y))
+            
+            # Shadow for text
+            shadow = self.font_large.render(jumpscare_msg, True, (0, 0, 0))
+            shadow_rect = shadow.get_rect(center=(jumpscare_rect.centerx + 3, jumpscare_rect.centery + 3))
+            self.screen.blit(shadow, shadow_rect)
             self.screen.blit(jumpscare_text, jumpscare_rect)
 
-            # Static overlay
-            self.apply_creepy_static(0.8)
+            # Enhanced static overlay
+            self.apply_creepy_static(0.9)
+            
+            # Apply VHS distortion
+            self.apply_vhs_effect(1.5)
 
             # Restart instructions
             restart_text = self.font_medium.render("Press [R] to restart  |  [M] for Menu",
@@ -2995,25 +3218,55 @@ class Game:
             restart_rect = restart_text.get_rect(center=(self.game_state.width // 2,
                 int(self.game_state.height * 0.65)))
             self.screen.blit(restart_text, restart_rect)
+        else:
+            # During zoom-in, add intense chromatic aberration
+            self.apply_chromatic_aberration(aberration_intensity)
 
     def draw_win(self):
-        """Draw win screen"""
-        # Green tinted background with gradient
+        """Draw win screen with enhanced effects"""
+        # Animated green gradient background
+        time_offset = time.time() * 0.3
         for y in range(self.game_state.height):
             ratio = y / self.game_state.height
-            r = int(10 * ratio)
-            g = int(40 + 30 * ratio)
-            b = int(10 * ratio)
+            wave = math.sin(time_offset + ratio * 2) * 0.1
+            r = int(10 * ratio + wave * 20)
+            g = int(40 + 60 * ratio + wave * 30)
+            b = int(10 * ratio + wave * 15)
             pygame.draw.line(self.screen, (r, g, b), (0, y), (self.game_state.width, y))
 
-        # Pulsing green overlay
-        pulse = math.sin(time.time() * 2) * 0.2 + 0.6
+        # Pulsing green overlay with enhanced effect
+        pulse = math.sin(time.time() * 2) * 0.3 + 0.5
         win_surface = pygame.Surface((self.game_state.width, self.game_state.height))
-        win_surface.set_alpha(int(100 * pulse))
+        win_surface.set_alpha(int(120 * pulse))
         win_surface.fill((100, 255, 100))
         self.screen.blit(win_surface, (0, 0))
+        
+        # Celebratory particles
+        if not hasattr(self, 'win_particles_spawned') or not self.win_particles_spawned:
+            for _ in range(50):
+                self.add_particle(
+                    self.rng.randint(0, self.game_state.width),
+                    self.rng.randint(0, self.game_state.height),
+                    self.rng.uniform(-3, 3), self.rng.uniform(-5, 2),
+                    (100, 255, 100, 255), self.rng.randint(3, 8), self.rng.uniform(2.0, 4.0)
+                )
+            self.win_particles_spawned = True
+        
+        # Draw particles
+        self.draw_particles()
 
-        # Win text with scale effect
+        # Win text with scale effect and glow
+        scale_pulse = 1.0 + math.sin(time.time() * 3) * 0.1
+        
+        # Glow layers
+        for i in range(3):
+            offset = (3 - i) * 2
+            glow_text = self.font_title.render("6 AM", True, (50, 150, 50))
+            glow_text.set_alpha(100 - i * 30)
+            glow_rect = glow_text.get_rect(center=(self.game_state.width // 2 + offset, 
+                                                   int(self.game_state.height * 0.25) + offset))
+            self.screen.blit(glow_text, glow_rect)
+        
         win_text = self.font_title.render("6 AM", True, (100, 255, 100))
         win_shadow = self.font_title.render("6 AM", True, (20, 80, 20))
         win_rect = win_text.get_rect(center=(self.game_state.width // 2, int(self.game_state.height * 0.25)))
@@ -3122,8 +3375,16 @@ class Game:
         if self.noise_maker_menu_active:
             self.draw_noise_maker_menu()
         
-        # Draw particles
+        # Draw particles with enhanced effects
         self.draw_particles()
+        
+        # Apply advanced visual effects
+        self.apply_vhs_effect(self.game_state.vhs_effect)
+        self.apply_chromatic_aberration(self.game_state.chromatic_aberration)
+        
+        # Apply screen glow
+        if self.game_state.glow_intensity > 0:
+            self.apply_screen_glow(self.game_state.glow_intensity)
         
         # Apply color overlay
         self.apply_color_overlay()
@@ -3132,13 +3393,25 @@ class Game:
         if self.static_intensity > 0:
             self.apply_creepy_static(self.static_intensity)
         
-        # Low power flickering
+        # Enhanced low power flickering with more dramatic effects
         if self.power.current < 20 and self.power.current > 0:
-            if int(time.time() * 10) % 2 == 0:
+            flicker_speed = 20 if self.power.current < 10 else 10
+            if int(time.time() * flicker_speed) % 2 == 0:
                 flicker = pygame.Surface((self.game_state.width, self.game_state.height))
-                flicker.set_alpha(30)
+                flicker_alpha = 40 if self.power.current < 10 else 30
+                flicker.set_alpha(flicker_alpha)
                 flicker.fill((255, 100, 0))
                 self.screen.blit(flicker, (0, 0))
+                
+                # Add spark particles during critical power
+                if self.power.current < 10 and self.rng.random() < 0.3:
+                    for _ in range(3):
+                        self.add_particle(
+                            self.rng.randint(0, self.game_state.width),
+                            self.rng.randint(0, self.game_state.height),
+                            self.rng.uniform(-2, 2), self.rng.uniform(-3, -1),
+                            (255, 200, 0, 255), 4, 0.5
+                        )
 
     def draw_pause(self):
         """Draw pause overlay"""
@@ -3167,79 +3440,133 @@ class Game:
     # =====================================================
 
     def toggle_door(self, side):
-        """Toggle a door"""
+        """Toggle a door with enhanced visual feedback"""
         if self.power.outage:
             return
 
         if side == "left":
+            door_x = 100
             if self.office.door_left_closed:
                 # Opening door
                 self.office.door_left_closed = False
                 sound = "door_open"
+                # Spawn particles when opening
+                for _ in range(8):
+                    self.add_particle(door_x, self.game_state.height // 2,
+                                    random.uniform(-3, 3), random.uniform(-2, 2),
+                                    (150, 150, 200, 255), 3, 0.8)
             else:
                 # Closing door - requires health and no jam
                 if self.office.door_left_jam_timer > 0 or self.office.door_left_health <= 0:
                     self.set_status("Left door jammed!")
+                    # Spawn red warning particles
+                    for _ in range(15):
+                        self.add_particle(door_x, self.game_state.height // 2,
+                                        random.uniform(-5, 5), random.uniform(-5, 5),
+                                        (255, 50, 50, 255), 4, 0.6)
                     return
                 self.office.door_left_closed = True
                 self.office.door_left_health = max(0, self.office.door_left_health - 6)
                 sound = "door_close"
                 self.total_door_closes += 1
+                # Spawn slam particles
+                for _ in range(12):
+                    self.add_particle(door_x, self.game_state.height // 2,
+                                    random.uniform(-4, 4), random.uniform(-3, 1),
+                                    (200, 200, 255, 255), 5, 1.0)
                 # Check if this was a perfect block
                 if any(a.room == "Hallway" and a.attack_side == "left" for a in self.animatronics):
                     self.perfect_blocks += 1
                     self.combo_blocks += 1
                     self.combo_timer = 5.0  # 5 seconds to chain
                     self.add_screen_shake(2, 0.2)
+                    # Extra particles for successful block!
+                    for _ in range(20):
+                        self.add_particle(door_x, self.game_state.height // 2,
+                                        random.uniform(-6, 6), random.uniform(-6, 2),
+                                        (100, 255, 100, 255), 6, 1.2)
                 self.check_reflex_cheat("left")
             self.assets.play_sound(sound)
         elif side == "right":
+            door_x = self.game_state.width - 100
             if self.office.door_right_closed:
                 # Opening door
                 self.office.door_right_closed = False
                 sound = "door_open"
+                # Spawn particles when opening
+                for _ in range(8):
+                    self.add_particle(door_x, self.game_state.height // 2,
+                                    random.uniform(-3, 3), random.uniform(-2, 2),
+                                    (150, 150, 200, 255), 3, 0.8)
             else:
                 # Closing door - requires health and no jam
                 if self.office.door_right_jam_timer > 0 or self.office.door_right_health <= 0:
                     self.set_status("Right door jammed!")
+                    # Spawn red warning particles
+                    for _ in range(15):
+                        self.add_particle(door_x, self.game_state.height // 2,
+                                        random.uniform(-5, 5), random.uniform(-5, 5),
+                                        (255, 50, 50, 255), 4, 0.6)
                     return
                 self.office.door_right_closed = True
                 self.office.door_right_health = max(0, self.office.door_right_health - 6)
                 sound = "door_close"
                 self.total_door_closes += 1
+                # Spawn slam particles
+                for _ in range(12):
+                    self.add_particle(door_x, self.game_state.height // 2,
+                                    random.uniform(-4, 4), random.uniform(-3, 1),
+                                    (200, 200, 255, 255), 5, 1.0)
                 # Check if this was a perfect block
                 if any(a.room == "Hallway" and a.attack_side == "right" for a in self.animatronics):
                     self.perfect_blocks += 1
                     self.combo_blocks += 1
                     self.combo_timer = 5.0  # 5 seconds to chain
                     self.add_screen_shake(2, 0.2)
+                    # Extra particles for successful block!
+                    for _ in range(20):
+                        self.add_particle(door_x, self.game_state.height // 2,
+                                        random.uniform(-6, 6), random.uniform(-6, 2),
+                                        (100, 255, 100, 255), 6, 1.2)
                 self.check_reflex_cheat("right")
             self.assets.play_sound(sound)
 
     def toggle_flashlight(self):
-        """Toggle flashlight"""
+        """Toggle flashlight with particle effect"""
         if self.power.outage:
             return
         self.office.light_on = not self.office.light_on
         self.assets.play_sound("light_toggle")
+        
+        # Spawn light particles in center
+        if self.office.light_on:
+            for _ in range(15):
+                self.add_particle(self.game_state.width // 2, self.game_state.height // 2,
+                                random.uniform(-8, 8), random.uniform(-8, 8),
+                                (255, 255, 200, 255), 4, 0.7)
 
     def toggle_cameras(self):
-        """Toggle camera view"""
+        """Toggle camera view with enhanced effects"""
         if self.power.outage:
             return
         self.office.cams_open = not self.office.cams_open
         if self.office.cams_open:
             self.office.cam_flash = 1.0
             self.total_camera_checks += 1
+            # Static burst effect
+            self.game_state.vhs_effect = min(2.0, self.game_state.vhs_effect + 0.5)
         else:
-            pass  # No static loop needed in this version
+            # Closing cameras also triggers brief static
+            self.game_state.vhs_effect = min(2.0, self.game_state.vhs_effect + 0.3)
 
     def switch_camera(self, index):
-        """Switch to a specific camera"""
+        """Switch to a specific camera with enhanced flash"""
         if 0 <= index < len(self.cameras.cameras):
             self.cameras.switch(index)
             if self.office.cams_open:
                 self.office.cam_flash = 1.0
+                # Brief VHS distortion spike
+                self.game_state.vhs_effect = min(2.0, self.game_state.vhs_effect + 0.2)
     
     def use_barricade(self):
         """Reinforce doors with barricades"""

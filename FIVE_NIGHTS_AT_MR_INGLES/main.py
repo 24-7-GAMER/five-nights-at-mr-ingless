@@ -385,6 +385,18 @@ class Animatronic:
                 self.hunt_target_room = None
                 if self.mood == "hunting":
                     self.mood = "neutral"
+                # Resume patrol route when hunt expires
+                # This prevents getting stuck at noise maker locations
+                if self.room != self.patrol_route[self.patrol_index]:
+                    # Find closest patrol point and resume from there
+                    min_dist = 999
+                    best_idx = self.patrol_index
+                    for i, patrol_room in enumerate(self.patrol_route):
+                        dist = self._distance_to_room(self.room, patrol_room)
+                        if dist < min_dist:
+                            min_dist = dist
+                            best_idx = i
+                    self.patrol_index = best_idx
 
         # Update mood state (affects behavior)
         if self.mood_timer >= 2.0:
@@ -1324,6 +1336,18 @@ class Game:
         """Add temporary color overlay (r, g, b, alpha)"""
         self.color_overlay = color
         self.color_overlay_timer = duration
+    
+    def add_particle(self, x, y, vx, vy, color, size, life):
+        """Add a single particle with specified properties"""
+        self.particles.append({
+            'x': x,
+            'y': y,
+            'vx': vx,
+            'vy': vy,
+            'color': color,
+            'life': life,
+            'size': size
+        })
     
     def add_particle_burst(self, x, y, count, color, speed_range=(1, 3)):
         """Create a burst of particles at position"""

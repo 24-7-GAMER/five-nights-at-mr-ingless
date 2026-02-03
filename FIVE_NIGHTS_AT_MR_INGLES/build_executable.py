@@ -60,6 +60,9 @@ def main():
             time.sleep(0.2)
         
         # Remove old spec file
+        spec_file = "Five Nights At Mr Ingles.spec"
+        if os.path.exists(spec_file):
+            os.remove(spec_file)
         spec_file = "Five Nights At Mr Ingles's.spec"
         if os.path.exists(spec_file):
             os.remove(spec_file)
@@ -98,7 +101,7 @@ def main():
             "-m", "PyInstaller",
             "--onefile",                    # Single executable file
             "--windowed",                   # No console window (GUI app)
-            "--name", "Five Nights At Mr Ingles's",  # Output name with proper spacing
+            "--name", "Five Nights At Mr Ingles",  # Output name (no apostrophe to avoid .spec syntax error)
             "--add-data", "assets;assets",  # Include assets folder
             "--icon", icon_path,            # Use title.png as icon
             "--clean",                      # Clean PyInstaller cache
@@ -151,7 +154,7 @@ def main():
         print_progress("Step 5/5: Verifying build output")
         time.sleep(0.5)
         
-        exe_path = os.path.join("dist", "Five Nights At Mr Ingles's.exe")
+        exe_path = os.path.join("dist", "Five Nights At Mr Ingles.exe")
         if os.path.exists(exe_path):
             size_mb = os.path.getsize(exe_path) / (1024 * 1024)
             print(f" ✓ Executable created successfully!")

@@ -1,274 +1,142 @@
 #!/usr/bin/env python3
 """
-Cross-platform executable builder for Five Nights at Mr Ingles
-Detects platform and creates appropriate executable (.exe, .app, or binary)
+Build executable for Five Nights at Mr Ingles's
+Creates a standalone .exe with PyInstaller
 """
 
 import sys
 import os
-import platform
-import subprocess
 import shutil
-
-def get_platform_info():
-    """Detect current platform"""
-    system = platform.system()
-    if system == "Windows":
-        return "Windows", ".exe"
-    elif system == "Darwin":
-        return "macOS", ".app"
-    elif system == "Linux":
-        return "Linux", ""
-    else:
-        return "Unknown", ""
-
-def check_pyinstaller():
-    """Check if PyInstaller is installed, install if needed"""
-    try:
-        import PyInstaller
-        print("✓ PyInstaller is installed")
-        return True
-    except ImportError:
-        print("✗ PyInstaller not found, installing...")
-        try:
-            subprocess.check_call([sys.executable, "-m", "pip", "install", "pyinstaller"])
-            print("✓ PyInstaller installed successfully")
-            return True
-        except Exception as e:
-            print(f"✗ Failed to install PyInstaller: {e}")
-            return False
-
-def check_pillow():
-    """Check if Pillow is installed (optional, for icon conversion)"""
-    try:
-        import PIL
-        print("✓ Pillow is installed (icons enabled)")
-        return True
-    except ImportError:
-        print("⚠ Pillow not found (installing for icon support...)")
-        try:
-            subprocess.check_call([sys.executable, "-m", "pip", "install", "pillow"])
-            print("✓ Pillow installed successfully")
-            return True
-        except Exception as e:
-            print(f"⚠ Could not install Pillow - building without icon: {e}")
-            return False
-
-def create_icns_from_png(png_path, icns_path):
-    """Convert PNG to ICNS format for macOS"""
-    try:
-        from PIL import Image
-        img = Image.open(png_path)
-        
-        # Create iconset directory
-        iconset_dir = "icon.iconset"
-        os.makedirs(iconset_dir, exist_ok=True)
-        
-        # Generate all required sizes for macOS
-        sizes = [16, 32, 64, 128, 256, 512, 1024]
-        for size in sizes:
-            # Standard resolution
-            resized = img.resize((size, size), Image.Resampling.LANCZOS)
-            resized.save(f"{iconset_dir}/icon_{size}x{size}.png")
-            
-            # Retina resolution (except 1024)
-            if size <= 512:
-                retina_size = size * 2
-                resized_retina = img.resize((retina_size, retina_size), Image.Resampling.LANCZOS)
-                resized_retina.save(f"{iconset_dir}/icon_{size}x{size}@2x.png")
-        
-        # Convert iconset to icns using macOS tool
-        result = subprocess.run(
-            ["iconutil", "-c", "icns", iconset_dir, "-o", icns_path],
-            capture_output=True,
-            text=True
-        )
-        
-        # Clean up iconset directory
-        shutil.rmtree(iconset_dir, ignore_errors=True)
-        
-        if result.returncode == 0 and os.path.exists(icns_path):
-            print(f"✓ Created macOS icon: {icns_path}")
-            return True
-        else:
-            print(f"⚠ iconutil failed: {result.stderr}")
-            return False
-            
-    except Exception as e:
-        print(f"⚠ Could not create .icns file: {e}")
-        return False
-
-def build_executable():
-    """Build the executable for current platform"""
-    system, ext = get_platform_info()
-    
-    print(f"\n{'='*60}")
-    print(f"Five Nights at Mr Ingles - Executable Builder")
-    print(f"{'='*60}")
-    print(f"Detected Platform: {system}")
-    
-    if not check_pyinstaller():
-        print("\nFailed to install PyInstaller. Exiting.")
-        sys.exit(1)
-    
-    # Check for Pillow (optional, for icon support)
-    has_pillow = check_pillow()
-    
-    # Ensure we're in the correct directory
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    os.chdir(script_dir)
-    
-    print(f"\nWorking directory: {script_dir}")
-    print(f"Building executable...")
-    
-    # PyInstaller command
-    output_name = "Five Nights At Mr Ingles's"
-    
-    # Basic PyInstaller options that work on all platforms
-    pyinstaller_args = [
-        sys.executable,
-        "-m",
-        "PyInstaller",
-        "--onefile",  # Single file executable
-        "--windowed",  # No console window
-        "--name",
-        output_name,
-        "--distpath",
-        "./dist",  # Output directory
-        "--workpath",
-        "./build",
-        "--add-data",
-        f"assets{os.pathsep}assets",  # Include assets folder
-        # Hidden imports for pygame (especially important for macOS)
-        "--hidden-import",
-        "pygame",
-        "--hidden-import",
-        "pygame.mixer",
-        "--hidden-import",
-        "pygame.font",
-        "--hidden-import",
-        "pygame.time",
-        "--hidden-import",
-        "pygame.display",
-        "--hidden-import",
-        "pygame.image",
-        "--hidden-import",
-        "pygame.transform",
-        "--collect-all",
-        "pygame",
-        "main.py"
-    ]
-    
-    # Platform-specific options
-    if system == "Windows":
-        # Use title.png for Windows icon
-        if os.path.exists("assets/img/title.png"):
-            pyinstaller_args.extend([
-                "--icon",
-                "assets/img/title.png",
-            ])
-    elif system == "macOS":
-        # macOS bundle configuration
-        pyinstaller_args.extend([
-            "--osx-bundle-identifier",
-            "com.fiveninghtsatmringles.game",
-        ])
-        
-        # Create .icns icon from title.png if possible
-        if has_pillow and os.path.exists("assets/img/title.png"):
-            icns_path = "app_icon.icns"
-            if create_icns_from_png("assets/img/title.png", icns_path):
-                pyinstaller_args.extend([
-                    "--icon",
-                    icns_path,
-                ])
-        
-        # Create entitlements.plist for pygame compatibility (must be created BEFORE adding to args)
-        entitlements_content = """<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
-    <true/>
-    <key>com.apple.security.cs.disable-library-validation</key>
-    <true/>
-</dict>
-</plist>"""
-        with open("entitlements.plist", "w") as f:
-            f.write(entitlements_content)
-        print("✓ Created macOS entitlements file for pygame compatibility")
-        
-        # Add macOS-specific pygame fix (after creating the file)
-        pyinstaller_args.extend([
-            "--osx-entitlements-file",
-            "entitlements.plist",
-        ])
-    
-    try:
-        print(f"\nRunning PyInstaller...\n")
-        subprocess.run(pyinstaller_args, check=True)
-        
-        # Determine output file path (PyInstaller sanitizes special characters)
-        if system == "Windows":
-            output_file = f"dist/Five Nights At Mr Ingles's.exe"
-        elif system == "macOS":
-            output_file = f"dist/Five Nights At Mr Ingles's.app"
-        elif system == "Linux":
-            output_file = f"dist/Five Nights At Mr Ingles's"
-        else:
-            output_file = f"dist/Five Nights At Mr Ingles's"
-        
-        if os.path.exists(output_file):
-            print(f"\n{'='*60}")
-            print(f"✓ SUCCESS! Executable created!")
-            print(f"{'='*60}")
-            print(f"\nPlatform: {system}")
-            print(f"Output: {output_file}")
-            print(f"\nTo run the game:")
-            
-            if system == "Windows":
-                print(f"  Double-click: {output_file}")
-                print(f"  Or run: .\\{output_name}.exe")
-            elif system == "macOS":
-                print(f"  Double-click: {output_file}")
-                print(f"  Or run: open {output_file}")
-            elif system == "Linux":
-                print(f"  Run: ./{output_file}")
-                print(f"  Or: chmod +x {output_file} && ./{output_file}")
-            
-            # Cleanup temporary files
-            if system == "macOS":
-                if os.path.exists("entitlements.plist"):
-                    os.remove("entitlements.plist")
-                    print("\n✓ Cleaned up temporary files")
-                if os.path.exists("app_icon.icns"):
-                    os.remove("app_icon.icns")
-            
-            print(f"\nNote: The 'dist' folder can be shared with others on the same platform!")
-            print(f"They can run the game without Python installed.\n")
-        else:
-            print(f"\n✗ Build failed - output file not found at {output_file}")
-            sys.exit(1)
-            
-    except subprocess.CalledProcessError as e:
-        print(f"\n✗ Build failed with error:")
-        print(f"{e}")
-        sys.exit(1)
-    except Exception as e:
-        print(f"\n✗ Unexpected error:")
-        print(f"{e}")
-        sys.exit(1)
+import subprocess
 
 def main():
-    """Main entry point"""
+    """Build the executable with error handling"""
     try:
-        build_executable()
+        # Change to script directory to ensure we're in the right place
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        os.chdir(script_dir)
+        
+        print("=" * 60)
+        print("Building Five Nights at Mr Ingles's Executable")
+        print("=" * 60)
+        print(f"Working directory: {os.getcwd()}")
+        print()
+        
+        # Check if PyInstaller is installed
+        try:
+            import PyInstaller
+            print(f"✓ PyInstaller found: {PyInstaller.__version__}")
+        except ImportError:
+            print("✗ PyInstaller not found. Installing...")
+            subprocess.check_call([sys.executable, "-m", "pip", "install", "pyinstaller"])
+            print("✓ PyInstaller installed successfully")
+        
+        print()
+        
+        # Clean previous builds
+        print("Cleaning previous builds...")
+        for folder in ['build', 'dist']:
+            if os.path.exists(folder):
+                try:
+                    shutil.rmtree(folder)
+                    print(f"  ✓ Removed {folder}/")
+                except Exception as e:
+                    print(f"  ⚠ Warning: Could not remove {folder}/: {e}")
+        
+        # Remove old spec file
+        spec_file = "main.spec"
+        if os.path.exists(spec_file):
+            try:
+                os.remove(spec_file)
+                print(f"  ✓ Removed {spec_file}")
+            except Exception as e:
+                print(f"  ⚠ Warning: Could not remove {spec_file}: {e}")
+        
+        print()
+        
+        # Build command
+        print("Building executable with PyInstaller...")
+        print()
+        
+        cmd = [
+            sys.executable,
+            "-m", "PyInstaller",
+            "--onefile",                    # Single executable file
+            "--windowed",                   # No console window (GUI app)
+            "--name", "FiveNightsAtMrIngles",  # Output name
+            "--add-data", "assets;assets",  # Include assets folder
+            "--icon", "assets/img/office.png" if os.path.exists("assets/img/office.png") else "NONE",
+            "--clean",                      # Clean PyInstaller cache
+            "main.py"
+        ]
+        
+        print("Command:", " ".join(cmd))
+        print()
+        
+        # Run PyInstaller (show all output)
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        
+        # Always show output
+        if result.stdout:
+            print(result.stdout)
+        if result.stderr:
+            print("STDERR:", result.stderr)
+        
+        if result.returncode != 0:
+            print()
+            print("=" * 60)
+            print("✗ BUILD FAILED")
+            print("=" * 60)
+            print(f"PyInstaller exited with code {result.returncode}")
+            print()
+            print("Common issues:")
+            print("  1. Missing dependencies - run: pip install -r requirements.txt")
+            print("  2. Antivirus blocking PyInstaller")
+            print("  3. File permissions in build/dist folders")
+            print()
+            input("Press Enter to exit...")
+            sys.exit(1)
+        
+        print()
+        print("=" * 60)
+        print("✓ BUILD SUCCESSFUL")
+        print("=" * 60)
+        
+        # Check if executable exists
+        exe_path = os.path.join("dist", "FiveNightsAtMrIngles.exe")
+        if os.path.exists(exe_path):
+            size_mb = os.path.getsize(exe_path) / (1024 * 1024)
+            print(f"Executable: {exe_path}")
+            print(f"Size: {size_mb:.2f} MB")
+            print()
+            print("You can now run the game from the dist/ folder!")
+        else:
+            print(f"⚠ Warning: Expected executable not found at {exe_path}")
+            print("Check the dist/ folder manually")
+        
+        print()
+        print("=" * 60)
+        
     except KeyboardInterrupt:
-        print("\n\nBuild cancelled by user.")
-        sys.exit(0)
-    except Exception as e:
-        print(f"\nFatal error: {e}")
+        print("\n\n✗ Build cancelled by user")
         sys.exit(1)
+    except Exception as e:
+        print()
+        print("=" * 60)
+        print("✗ UNEXPECTED ERROR")
+        print("=" * 60)
+        print(f"Error type: {type(e).__name__}")
+        print(f"Error message: {e}")
+        print()
+        import traceback
+        traceback.print_exc()
+        print()
+        print("=" * 60)
+        input("Press Enter to exit...")
+        sys.exit(1)
+    
+    # Keep window open
+    input("\nPress Enter to exit...")
 
 if __name__ == "__main__":
     main()

@@ -39,12 +39,13 @@
 
 | Item | Original | New | Status |
 |------|----------|-----|--------|
-| **Main Game File** | main.lua (864 lines) | main.py (1,712 lines) | ✅ Complete + Enhanced |
-| **Engine** | LOVE2D | Pygame 2.1.0+ | ✅ Modern |
-| **Game Mechanics** | 100% intact | 100% preserved + AI enhancements | ✅ Enhanced |
+| **Main Game File** | main.lua (864 lines) | main.py (4,000+ lines) | ✅ Complete + Enhanced |
+| **Engine** | LOVE2D | Pygame 2.6.1 | ✅ Modern |
+| **UI/UX** | Basic rectangles | Modern rounded design (v2.0) | ✅ Completely Overhauled |
+| **Game Mechanics** | 100% intact | 100% preserved + Bug fixes | ✅ Enhanced |
 | **Assets** | Reused directly | Same file structure | ✅ Compatible |
 | **Code Structure** | Procedural | Object-Oriented (9 classes) | ✅ Improved |
-| **AI System** | Basic pathfinding | Advanced learning with mood & coordination | ✅ Cutting-edge |
+| **AI System** | Basic pathfinding | Advanced with patrol resumption | ✅ Enhanced |
 | **Documentation** | Basic | Comprehensive | ✅ Enhanced |
 | **Cross-Platform** | Platform-specific scripts | Universal launcher | ✅ Works Everywhere |
 
@@ -88,16 +89,21 @@
 - ✅ Per-night ambience (5 unique tracks)
 
 ### Visual Enhancements
+- ✅ **Modern UI (v2.0)** with rounded corners throughout
+- ✅ **Animated particle system** on menu with floating elements
+- ✅ **Gradient backgrounds** with smooth animations
+- ✅ **Modern sliders** with custom handles and value displays
+- ✅ **Night selection grid** with color-coded difficulty indicators
+- ✅ **Hover effects and glowing buttons** for better interactivity
 - ✅ Interactive minimap with clickable cameras
 - ✅ Animatronic position tracking on minimap
 - ✅ Faint minimap overlay during camera view
 - ✅ Creepy static effects and noise overlay
 - ✅ Screen shake on critical power
 - ✅ Flickering lights on low power
-- ✅ Animated gradient menu
-- ✅ Pulsing title and bobbing buttons
 - ✅ Menu theme
 - ✅ Volume controls
+- ✅ **Terms of Service agreement** with checkbox
 
 ### Visual Effects
 - ✅ Smooth door animations

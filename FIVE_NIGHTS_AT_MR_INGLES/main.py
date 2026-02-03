@@ -913,6 +913,8 @@ class Game:
             {"key": "intro_splash", "fade_in": 1.0, "hold": 1.0, "fade_out": 1.0},
             {"key": "tos_splash", "fade_in": 1.0, "hold": 3.5, "fade_out": 1.0},
         ]
+        self.tos_agreed = False  # ToS checkbox state
+        self.tos_checkbox_rect = None  # Will be set during draw
 
         # Tutorial slideshow (after intro)
         self.tutorial_index = 0
@@ -2197,11 +2199,22 @@ class Game:
         current = self.splash_sequence[self.splash_stage]
         total = current["fade_in"] + current["hold"] + current["fade_out"]
         self.splash_timer += dt
-        if self.splash_timer >= total:
-            self.splash_timer = 0.0
-            self.splash_stage += 1
-            if self.splash_stage >= len(self.splash_sequence):
-                self.enter_menu()
+        
+        # For ToS screen (stage 1), require checkbox agreement
+        if self.splash_stage == 1:
+            # Don't auto-advance, wait for checkbox click
+            if self.tos_agreed and self.splash_timer >= total:
+                self.splash_timer = 0.0
+                self.splash_stage += 1
+                if self.splash_stage >= len(self.splash_sequence):
+                    self.enter_menu()
+        else:
+            # Other splash screens auto-advance
+            if self.splash_timer >= total:
+                self.splash_timer = 0.0
+                self.splash_stage += 1
+                if self.splash_stage >= len(self.splash_sequence):
+                    self.enter_menu()
 
     def update_intro(self, dt):
         """Update intro message sequence (fade in/out per message)"""
@@ -2268,6 +2281,38 @@ class Game:
         fade_surface.set_alpha(int(255 * (1.0 - self.clamp(alpha, 0.0, 1.0))))
         fade_surface.fill((0, 0, 0))
         self.screen.blit(fade_surface, (0, 0))
+        
+        # Draw checkbox for ToS screen (stage 1)
+        if self.splash_stage == 1 and alpha > 0.5:
+            checkbox_size = 30
+            checkbox_x = int(self.game_state.width * 0.25)
+            checkbox_y = int(self.game_state.height * 0.85)
+            
+            # Store checkbox rect for click detection
+            self.tos_checkbox_rect = pygame.Rect(checkbox_x, checkbox_y, checkbox_size, checkbox_size)
+            
+            # Draw checkbox box
+            pygame.draw.rect(self.screen, (200, 200, 200), self.tos_checkbox_rect, 3)
+            
+            # Draw checkmark if agreed
+            if self.tos_agreed:
+                # Draw an X checkmark
+                pygame.draw.line(self.screen, (100, 255, 100), 
+                               (checkbox_x + 5, checkbox_y + 5), 
+                               (checkbox_x + checkbox_size - 5, checkbox_y + checkbox_size - 5), 4)
+                pygame.draw.line(self.screen, (100, 255, 100), 
+                               (checkbox_x + checkbox_size - 5, checkbox_y + 5), 
+                               (checkbox_x + 5, checkbox_y + checkbox_size - 5), 4)
+            
+            # Draw label text
+            label_text = self.font_medium.render("I agree to the Terms of Service", True, (255, 255, 255))
+            self.screen.blit(label_text, (checkbox_x + checkbox_size + 15, checkbox_y))
+            
+            # Draw instruction if not agreed yet
+            if not self.tos_agreed:
+                instruction = self.font_small.render("Click the checkbox to continue", True, (255, 200, 100))
+                instr_rect = instruction.get_rect(center=(self.game_state.width // 2, checkbox_y + 50))
+                self.screen.blit(instruction, instr_rect)
 
     def draw_intro(self):
         """Draw the fading intro messages"""
@@ -3715,6 +3760,15 @@ class Game:
                 self.window_height = event.h
                 self.screen = pygame.display.set_mode((event.w, event.h), pygame.RESIZABLE)
             elif event.type == pygame.MOUSEBUTTONDOWN:
+                # ToS checkbox handling
+                if self.game_state.state == "splash" and self.splash_stage == 1:
+                    if self.tos_checkbox_rect:
+                        mx, my = self.scale_mouse_pos(event.pos)
+                        if self.tos_checkbox_rect.collidepoint(mx, my):
+                            self.tos_agreed = not self.tos_agreed
+                            # Play a sound if available
+                            self.assets.play_sound("light_toggle")
+                
                 # Menu slider handling
                 if self.game_state.state == "menu":
                     # Scale mouse position to game coordinates

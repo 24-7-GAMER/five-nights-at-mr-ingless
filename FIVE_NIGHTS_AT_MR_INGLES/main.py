@@ -639,6 +639,9 @@ class AssetManager:
         self.static_source = None
         self.ambience_source = None
         self.current_music = None
+        self.last_music = None
+        self.music_muted = False
+        self.sfx_muted = False
 
     def load_image(self, name, path):
         """Safely load an image"""
@@ -739,12 +742,17 @@ class AssetManager:
 
     def play_sound(self, name):
         """Play a sound effect"""
+        if self.sfx_muted:
+            return
         if name in self.sounds:
             self.sounds[name].stop()
             self.sounds[name].play()
 
     def play_music(self, name, loops=-1):
         """Play music (streaming)"""
+        self.last_music = name
+        if self.music_muted:
+            return
         # If trying to play ambience (any night), use the single ambience.mp3
         if name and name.startswith("ambience"):
             name = "ambience"
@@ -763,6 +771,18 @@ class AssetManager:
         """Stop current music"""
         pygame.mixer.music.stop()
         self.current_music = None
+
+    def set_music_muted(self, muted):
+        """Toggle music muting"""
+        self.music_muted = muted
+        if muted:
+            pygame.mixer.music.stop()
+        elif self.last_music:
+            self.play_music(self.last_music)
+
+    def set_sfx_muted(self, muted):
+        """Toggle SFX muting"""
+        self.sfx_muted = muted
 
     def get_image(self, name):
         """Get an image, return None if not loaded"""
@@ -788,6 +808,8 @@ class Game:
         # Track window size for scaling
         self.window_width = WINDOW_WIDTH
         self.window_height = WINDOW_HEIGHT
+        self.windowed_width = WINDOW_WIDTH
+        self.windowed_height = WINDOW_HEIGHT
         # Render to this surface at fixed resolution, then scale to screen
         self.render_surface = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT))
         # NOTE: Screen swap moved to AFTER asset loading (see below)
@@ -899,6 +921,11 @@ class Game:
         self.difficulty = 1.2
         self.dragging_difficulty = False
 
+        # Menu functional toggles (non-visual)
+        self.skip_tutorial = False
+        self.fullscreen = False
+        self.last_reset_request = 0.0
+
         # Intro sequence (Night 1)
         self.intro_messages = []
         self.intro_index = 0
@@ -999,75 +1026,6 @@ class Game:
     def log_event(self, msg, add_personality_hint=False):
         """Event log disabled"""
         pass
-    
-    def draw_rounded_rect(self, surface, color, rect, radius=10, border=0, border_color=None):
-        """Draw a rectangle with rounded corners"""
-        x, y, width, height = rect
-        radius = min(radius, width // 2, height // 2)
-        
-        # Draw filled rectangle
-        pygame.draw.rect(surface, color, (x + radius, y, width - 2 * radius, height))
-        pygame.draw.rect(surface, color, (x, y + radius, width, height - 2 * radius))
-        
-        # Draw corners
-        pygame.draw.circle(surface, color, (x + radius, y + radius), radius)
-        pygame.draw.circle(surface, color, (x + width - radius, y + radius), radius)
-        pygame.draw.circle(surface, color, (x + radius, y + height - radius), radius)
-        pygame.draw.circle(surface, color, (x + width - radius, y + height - radius), radius)
-        
-        # Draw border if specified
-        if border > 0 and border_color:
-            # Top and bottom
-            pygame.draw.line(surface, border_color, (x + radius, y), (x + width - radius, y), border)
-            pygame.draw.line(surface, border_color, (x + radius, y + height), (x + width - radius, y + height), border)
-            # Left and right
-            pygame.draw.line(surface, border_color, (x, y + radius), (x, y + height - radius), border)
-            pygame.draw.line(surface, border_color, (x + width, y + radius), (x + width, y + height - radius), border)
-            # Corners
-            pygame.draw.arc(surface, border_color, (x, y, radius * 2, radius * 2), 1.57, 3.14, border)
-            pygame.draw.arc(surface, border_color, (x + width - radius * 2, y, radius * 2, radius * 2), 0, 1.57, border)
-            pygame.draw.arc(surface, border_color, (x, y + height - radius * 2, radius * 2, radius * 2), 3.14, 4.71, border)
-            pygame.draw.arc(surface, border_color, (x + width - radius * 2, y + height - radius * 2, radius * 2, radius * 2), 4.71, 6.28, border)
-    
-    def draw_modern_button(self, x, y, width, height, text, color, hover=False, locked=False, glow=False):
-        """Draw a modern button with rounded corners and effects"""
-        radius = 15
-        
-        # Glow effect
-        if glow:
-            glow_surface = pygame.Surface((width + 20, height + 20), pygame.SRCALPHA)
-            glow_alpha = int(80 * (math.sin(time.time() * 3) * 0.3 + 0.7))
-            glow_color = (*color[:3], glow_alpha)
-            self.draw_rounded_rect(glow_surface, glow_color, (0, 0, width + 20, height + 20), radius + 10)
-            self.screen.blit(glow_surface, (x - 10, y - 10))
-        
-        # Button background with gradient effect
-        if locked:
-            btn_color = (40, 40, 50, 200)
-        elif hover:
-            btn_color = tuple(min(255, c + 30) for c in color[:3])
-        else:
-            btn_color = color
-        
-        # Shadow
-        shadow_offset = 4
-        self.draw_rounded_rect(self.screen, (0, 0, 0, 100), 
-                              (x + shadow_offset, y + shadow_offset, width, height), radius)
-        
-        # Main button
-        self.draw_rounded_rect(self.screen, btn_color, (x, y, width, height), radius)
-        
-        # Border
-        border_color = (255, 255, 255, 150) if hover else (200, 200, 200, 100)
-        self.draw_rounded_rect(self.screen, btn_color, (x, y, width, height), radius, 3, border_color)
-        
-        # Text
-        text_color = (100, 100, 120) if locked else (255, 255, 255)
-        text_surf = self.font_medium.render(text, True, text_color)
-        text_rect = text_surf.get_rect(center=(x + width // 2, y + height // 2))
-        self.screen.blit(text_surf, text_rect)
-        
-        return pygame.Rect(x, y, width, height)
 
     def break_door(self, side):
         """Force a door to jam open when its health is depleted"""
@@ -1231,6 +1189,12 @@ class Game:
                                                      self.difficulty_min, self.difficulty_max)
                     if "high_scores" in data:
                         self.high_scores = {int(k): v for k, v in data["high_scores"].items()}
+                    if "music_muted" in data:
+                        self.assets.set_music_muted(bool(data.get("music_muted")))
+                    if "sfx_muted" in data:
+                        self.assets.set_sfx_muted(bool(data.get("sfx_muted")))
+                    if "skip_tutorial" in data:
+                        self.skip_tutorial = bool(data.get("skip_tutorial"))
             except:
                 self.game_state.max_night_unlocked = 1
         else:
@@ -1242,6 +1206,9 @@ class Game:
             "max_night": self.clamp(self.game_state.max_night_unlocked, 1, 5),
             "difficulty": self.clamp(self.difficulty, self.difficulty_min, self.difficulty_max),
             "high_scores": self.high_scores,
+            "music_muted": self.assets.music_muted,
+            "sfx_muted": self.assets.sfx_muted,
+            "skip_tutorial": self.skip_tutorial,
         }
         try:
             with open(SAVE_FILE, 'w') as f:
@@ -1393,6 +1360,47 @@ class Game:
     def play_menu_music(self):
         """Play menu theme"""
         self.assets.play_music("menu_theme")
+
+    def toggle_fullscreen(self):
+        """Toggle fullscreen mode"""
+        self.fullscreen = not self.fullscreen
+        if self.fullscreen:
+            self.windowed_width = self.window_width
+            self.windowed_height = self.window_height
+            self.screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
+            info = pygame.display.Info()
+            self.window_width = info.current_w
+            self.window_height = info.current_h
+        else:
+            self.window_width = self.windowed_width
+            self.window_height = self.windowed_height
+            self.screen = pygame.display.set_mode((self.window_width, self.window_height), pygame.RESIZABLE)
+
+    def toggle_music_mute(self):
+        """Toggle music mute"""
+        self.assets.set_music_muted(not self.assets.music_muted)
+        if not self.assets.music_muted and self.game_state.state == "menu":
+            self.play_menu_music()
+
+    def toggle_sfx_mute(self):
+        """Toggle SFX mute"""
+        self.assets.set_sfx_muted(not self.assets.sfx_muted)
+
+    def toggle_skip_tutorial(self):
+        """Toggle tutorial skip on Night 1"""
+        self.skip_tutorial = not self.skip_tutorial
+
+    def reset_save_data(self):
+        """Reset save file and in-memory progress"""
+        if os.path.exists(SAVE_FILE):
+            try:
+                os.remove(SAVE_FILE)
+            except:
+                pass
+        self.game_state.max_night_unlocked = 1
+        self.high_scores = {}
+        self.difficulty = 1.2
+        self.save_progress()
 
     # =====================================================
     # UPDATE FUNCTIONS
@@ -2307,10 +2315,18 @@ class Game:
         # If finished all messages, show tutorial (only on Night 1)
         if self.intro_index >= len(self.intro_messages):
             if self.game_state.night == 1:
-                # Show tutorial slideshow
-                self.game_state.state = "tutorial"
-                self.tutorial_index = 0
-                self.tutorial_timer = 0.0
+                if self.skip_tutorial:
+                    ambience_key = f"ambience_n{self.game_state.night}"
+                    self.assets.play_music(ambience_key)
+                    self.game_state.state = "playing"
+                    self.game_state.start_time = time.time()
+                    self.game_state.hour_timer = 0
+                    self.game_state.minutes_elapsed = 0
+                else:
+                    # Show tutorial slideshow
+                    self.game_state.state = "tutorial"
+                    self.tutorial_index = 0
+                    self.tutorial_timer = 0.0
             else:
                 # Skip tutorial on other nights, go straight to playing
                 ambience_key = f"ambience_n{self.game_state.night}"
@@ -3041,133 +3057,152 @@ class Game:
             self.screen.blit(text, rect)
 
     def draw_menu(self):
-        """Draw main menu with modern UI"""
-        # Draw background image
+        """Draw main menu"""
+        # Draw background image if available, otherwise use gradient
         bg_img = self.assets.get_image("menu_background")
         if bg_img:
             scaled_bg = pygame.transform.scale(bg_img, (self.game_state.width, self.game_state.height))
             self.screen.blit(scaled_bg, (0, 0))
         else:
-            # Gradient background with animation
+            # Fallback to gradient if no background image
+            time_offset = time.time() * 0.5
+            color_shift = math.sin(time.time() * 0.5) * 30
             for y in range(self.game_state.height):
                 ratio = y / self.game_state.height
-                r = int(10 + 35 * ratio)
-                g = int(15 + 45 * ratio)
-                b = int(25 + 60 * ratio)
-                pygame.draw.line(self.screen, (r, g, b), (0, y), (self.game_state.width, y), 1)
+                wave = math.sin(time_offset + ratio * 3) * 0.1
+                r = int(self.clamp(10 + 35 * ratio + wave * 20 + color_shift * 0.3, 0, 255))
+                g = int(self.clamp(10 + 15 * ratio + color_shift * 0.1, 0, 255))
+                b = int(self.clamp(50 + 25 * ratio + wave * 10 + color_shift * 0.2, 0, 255))
+                pygame.draw.line(self.screen, (r, g, b), (0, y), (self.game_state.width, y))
 
-        # Animated particles in background
-        if not hasattr(self, 'menu_particles'):
-            self.menu_particles = []
-        if len(self.menu_particles) < 20:
-            x = self.rng.randint(0, self.game_state.width)
-            y = -10
-            vx = self.rng.uniform(-0.5, 0.5)
-            vy = self.rng.uniform(0.5, 2.0)
-            self.menu_particles.append({'x': x, 'y': y, 'vx': vx, 'vy': vy})
+        # Pulsing glow effect behind title
+        pulse = math.sin(time.time() * 2) * 0.2 + 0.8
+        glow_color = (int(100 * pulse), int(255 * pulse), int(255 * pulse))
         
-        # Update and draw particles
-        for p in self.menu_particles[:]:
-            p['x'] += p['vx']
-            p['y'] += p['vy']
-            if p['y'] > self.game_state.height:
-                self.menu_particles.remove(p)
-            else:
-                alpha = int(100 * (1 - p['y'] / self.game_state.height))
-                pygame.draw.circle(self.screen, (100, 150, 200), (int(p['x']), int(p['y'])), 2)
-
-        # Pulsing title with glow
-        current_time = time.time()
-        pulse = math.sin(current_time * 2) * 0.1 + 0.9
+        # Title image (fallback to text if missing)
         title_img = self.assets.get_image("title")
         if title_img:
-            scale = 0.6 * pulse * (self.game_state.width / 1280)
-            scaled = pygame.transform.scale(title_img, 
-                    (int(title_img.get_width() * scale), int(title_img.get_height() * scale)))
-            rect = scaled.get_rect(center=(self.game_state.width // 2, int(self.game_state.height * 0.20)))
-            
-            # Glow effect
-            glow_color_value = int(100 + math.sin(current_time * 2.5) * 50)
-            glow_surf = pygame.Surface(scaled.get_size(), pygame.SRCALPHA)
-            glow_surf.fill((glow_color_value, glow_color_value + 50, 255, 30))
-            self.screen.blit(glow_surf, rect, special_flags=pygame.BLEND_ADD)
-            
+            # pulsing scale animation for title
+            pulse_scale = math.sin(time.time() * 1.5) * 0.08 + 1.0
+            target_w = int(self.game_state.width * 1.0 * pulse_scale)
+            scale = target_w / title_img.get_width()
+            target_h = int(title_img.get_height() * scale)
+            # allow massive height (up to 60% of screen)
+            max_h = int(self.game_state.height * 0.60)
+            if target_h > max_h:
+                scale = max_h / title_img.get_height()
+                target_h = int(title_img.get_height() * scale)
+                target_w = int(title_img.get_width() * scale)
+            scaled = pygame.transform.smoothscale(title_img, (target_w, target_h))
+            rect = scaled.get_rect(center=(self.game_state.width // 2, int(self.game_state.height * 0.25)))
+            # glowing aura behind title
+            glow_alpha = int(100 * (math.sin(time.time() * 2) * 0.3 + 0.5))
             self.screen.blit(scaled, rect)
         else:
-            title = self.font_title.render("FIVE NIGHTS", True, (150, 200, 255))
-            title2 = self.font_title.render("AT MR INGLES'S", True, (150, 200, 255))
+            # Glow shadow effect
+            shadow_color = (int(30 * pulse), int(80 * pulse), int(100 * pulse))
+            shadow = self.font_title.render("FIVE NIGHTS", True, shadow_color)
+            shadow2 = self.font_title.render("AT MR INGLES'S", True, shadow_color)
+            shadow_rect = shadow.get_rect(center=(self.game_state.width // 2 + 3, int(self.game_state.height * 0.15) + 3))
+            shadow_rect2 = shadow2.get_rect(center=(self.game_state.width // 2 + 3, int(self.game_state.height * 0.25) + 3))
+            self.screen.blit(shadow, shadow_rect)
+            self.screen.blit(shadow2, shadow_rect2)
+
+            # Title with glow
+            title = self.font_title.render("FIVE NIGHTS", True, glow_color)
+            title2 = self.font_title.render("AT MR INGLES'S", True, glow_color)
             title_rect = title.get_rect(center=(self.game_state.width // 2, int(self.game_state.height * 0.15)))
             title2_rect = title2.get_rect(center=(self.game_state.width // 2, int(self.game_state.height * 0.25)))
             self.screen.blit(title, title_rect)
             self.screen.blit(title2, title2_rect)
 
-        # Night selection grid (modern layout)
+        # Night selection buttons with animations
         button_width = 110
         button_height = 70
         button_spacing = 145
         start_x = self.game_state.width // 2 - (button_spacing * 2) - button_width // 2
         button_y = int(self.game_state.height * 0.42)
         
-        self.night_buttons = {}
+        self.night_buttons = {}  # Store for click detection
 
         for night in range(1, 6):
             button_x = start_x + (night - 1) * button_spacing
             is_available = night <= self.game_state.max_night_unlocked
             is_locked = night > self.game_state.max_night_unlocked
 
+            # Bobbing animation with enhanced effects
+            bob = math.sin(time.time() * 2 + night) * 5 if is_available else 0
+            button_y_actual = button_y + bob
+
+            # Store button rect for click detection (use base y, not animated)
             self.night_buttons[night] = pygame.Rect(button_x, button_y, button_width, button_height)
 
-            # Animated button with bobbing effect
-            bob = math.sin(current_time * 2 + night) * 5
-            animated_y = button_y + bob
-            
+            # Button background with gradient
             if is_available:
-                button_color = (20, 150, 220)
-                color_pulse = math.sin(current_time * 1.5 + night) * 30
-                button_color = (int(button_color[0] + color_pulse * 0.1), 
-                              int(button_color[1] + color_pulse * 0.3), 
-                              int(button_color[2] + color_pulse * 0.2))
-                border_color = (100 + int(color_pulse * 0.5), 255, 255)
+                # color pulse based on night
+                color_pulse = math.sin(time.time() * 2 + night * 0.5) * 30 + 20
+                button_color = (int(20 + color_pulse * 0.2), int(150 - color_pulse * 0.1), int(220 + color_pulse * 0.3))
+                border_color = (int(100 + color_pulse * 0.3), int(255), int(255))
                 text_color = (255, 255, 255)
+                # Enhanced glow effect
+                glow_intensity = int(150 + math.sin(time.time() * 3 + night) * 50)
+                glow_rect = pygame.Rect(button_x - 5, button_y_actual - 5, button_width + 10, button_height + 10)
+                glow_surface = pygame.Surface((button_width + 10, button_height + 10))
+                glow_surface.set_alpha(glow_intensity // 3)
+                glow_surface.fill((100, 200, 255))
+                self.screen.blit(glow_surface, glow_rect)
+                pygame.draw.rect(self.screen, (int(20 + color_pulse * 0.5), int(100 + color_pulse * 0.2), int(150 + color_pulse * 0.3)), glow_rect, 2)
             else:
                 button_color = (40, 40, 80)
                 border_color = (70, 70, 120)
                 text_color = (80, 80, 140)
 
-            # Rounded corners button
-            self.draw_rounded_rect(self.screen, button_color, pygame.Rect(button_x, animated_y, button_width, button_height), 8)
-            self.draw_rounded_rect(self.screen, border_color, pygame.Rect(button_x, animated_y, button_width, button_height), 8, border=3)
+            pygame.draw.rect(self.screen, button_color, (button_x, button_y_actual, button_width, button_height))
+            pygame.draw.rect(self.screen, border_color, (button_x, button_y_actual, button_width, button_height), 3)
 
+            # Night text with shadow
+            night_shadow = self.font_button.render(str(night), True, (0, 0, 0))
+            night_shadow_rect = night_shadow.get_rect(center=(button_x + button_width // 2 + 2, button_y_actual + button_height // 2 + 2))
+            self.screen.blit(night_shadow, night_shadow_rect)
+            
             night_text = self.font_button.render(str(night), True, text_color)
-            night_rect = night_text.get_rect(center=(button_x + button_width // 2, animated_y + button_height // 2))
+            night_rect = night_text.get_rect(center=(button_x + button_width // 2, button_y_actual + button_height // 2))
             self.screen.blit(night_text, night_rect)
 
-        # Instructions with modern styling
+            # Lock indicator for unavailable nights
+            if is_locked:
+                lock_text = self.font_small.render("🔒", True, (200, 100, 100))
+                lock_rect = lock_text.get_rect(center=(button_x + button_width // 2, button_y_actual + button_height + 30))
+                self.screen.blit(lock_text, lock_rect)
+
+        # Instructions
         inst_text = self.font_medium.render("Select a night to survive", True, (200, 255, 200))
         inst_rect = inst_text.get_rect(center=(self.game_state.width // 2, int(self.game_state.height * 0.70)))
         self.screen.blit(inst_text, inst_rect)
 
-        # Survival record with pulsing border
+        # Survival record with styling and glow
         if self.game_state.max_night_unlocked == 1:
-            record_text = "No Record Yet - Mr. Ingles is Waiting..."
+            record_text = "No nights survived yet"
             record_color = (255, 100, 100)
         else:
-            record_text = f"You got to Night {self.game_state.max_night_unlocked}"
+            record_text = f"Your Record: Night {self.game_state.max_night_unlocked}"
             record_color = (100, 255, 150)
         
-        record = self.font_medium.render(record_text, True, record_color)
-        record_rect = record.get_rect(center=(self.game_state.width // 2, int(self.game_state.height * 0.76)))
+        # record pulsing effect
+        record_pulse = math.sin(time.time() * 2) * 0.2 + 0.8
+        pulsed_color = (int(record_color[0] * record_pulse), int(record_color[1] * record_pulse), int(record_color[2] * record_pulse))
         
-        # Pulsing record box
-        box_padding = 20
-        pulse_val = math.sin(current_time * 1.5) * 2
-        box_rect = pygame.Rect(record_rect.x - box_padding, record_rect.y - 10,
-                              record_rect.width + box_padding * 2, record_rect.height + 20)
-        self.draw_rounded_rect(self.screen, (20, 20, 40, 200), box_rect, 6)
-        pulse_color = (int(record_color[0] + pulse_val * 10), 
-                      int(record_color[1] + pulse_val * 10), 
-                      int(record_color[2] + pulse_val * 10))
-        self.draw_rounded_rect(self.screen, pulse_color, box_rect, 6, border=3)
+        record = self.font_medium.render(record_text, True, pulsed_color)
+        record_rect = record.get_rect(center=(self.game_state.width // 2, int(self.game_state.height * 0.75)))
+        # Record box with glow
+        box_alpha = int(200 + math.sin(time.time() * 2) * 50)
+        box_surface = pygame.Surface((record_rect.width + 40, record_rect.height + 20))
+        box_surface.set_alpha(box_alpha // 2)
+        box_surface.fill((20, 20, 40))
+        box_rect = box_surface.get_rect(center=(record_rect.centerx, record_rect.centery))
+        self.screen.blit(box_surface, box_rect)
+        pygame.draw.rect(self.screen, pulsed_color, (box_rect.x, box_rect.y,
+                         box_rect.width, box_rect.height), 3)
         self.screen.blit(record, record_rect)
 
         # Key hint
@@ -3179,16 +3214,16 @@ class Game:
         slider_height = 8
         slider_x = (self.game_state.width - slider_width) // 2
 
-        # Night length slider with rounded appearance
+        # Night length slider
         slider_y = int(self.game_state.height * 0.82)
-        self.draw_rounded_rect(self.screen, (60, 60, 90), pygame.Rect(slider_x, slider_y, slider_width, slider_height), 4)
+        pygame.draw.rect(self.screen, (60, 60, 90), (slider_x, slider_y, slider_width, slider_height))
         val = self.clamp(self.game_state.seconds_per_hour, self.slider_min, self.slider_max)
         t = (val - self.slider_min) / (self.slider_max - self.slider_min)
         fill_w = int(slider_width * t)
-        self.draw_rounded_rect(self.screen, (20, 150, 220), pygame.Rect(slider_x, slider_y, fill_w, slider_height), 4)
+        pygame.draw.rect(self.screen, (20, 150, 220), (slider_x, slider_y, fill_w, slider_height))
         knob_x = slider_x + fill_w
-        knob_rect = pygame.Rect(knob_x - 10, slider_y - 8, 20, 24)
-        self.draw_rounded_rect(self.screen, (200, 200, 255), knob_rect, 4)
+        knob_rect = pygame.Rect(knob_x - 8, slider_y - 6, 16, 20)
+        pygame.draw.rect(self.screen, (200, 200, 255), knob_rect)
 
         night_seconds = int(self.game_state.seconds_per_hour)
         minutes_total = int((self.game_state.seconds_per_hour * 6) / 60)
@@ -3198,18 +3233,14 @@ class Game:
 
         # Difficulty slider
         diff_y = int(self.game_state.height * 0.88)
-        self.draw_rounded_rect(self.screen, (60, 60, 90), pygame.Rect(slider_x, diff_y, slider_width, slider_height), 4)
+        pygame.draw.rect(self.screen, (60, 60, 90), (slider_x, diff_y, slider_width, slider_height))
         dval = self.clamp(self.difficulty, self.difficulty_min, self.difficulty_max)
         dt = (dval - self.difficulty_min) / (self.difficulty_max - self.difficulty_min)
         dfw = int(slider_width * dt)
-        self.draw_rounded_rect(self.screen, (220, 120, 60), pygame.Rect(slider_x, diff_y, dfw, slider_height), 4)
+        pygame.draw.rect(self.screen, (220, 120, 60), (slider_x, diff_y, dfw, slider_height))
         dknob_x = slider_x + dfw
-        dknob_rect = pygame.Rect(dknob_x - 10, diff_y - 8, 20, 24)
-        self.draw_rounded_rect(self.screen, (255, 210, 180), dknob_rect, 4)
-        
-        diff_label = self.font_small.render(f"Difficulty: {self.difficulty:.1f}x", True, (255, 180, 100))
-        diff_label_rect = diff_label.get_rect(center=(self.game_state.width // 2, diff_y - 18))
-        self.screen.blit(diff_label, diff_label_rect)
+        dknob_rect = pygame.Rect(dknob_x - 8, diff_y - 6, 16, 20)
+        pygame.draw.rect(self.screen, (255, 210, 180), dknob_rect)
 
         if dval < 0.95:
             diff_label = "EASY"
@@ -3221,17 +3252,16 @@ class Game:
             diff_label = "BRUTAL"
         else:
             diff_label = "MEGA-BRUTAL"
-
         dlabel = self.font_small.render(f"Difficulty: {diff_label} ({dval:.2f}x)", True, (255, 220, 200))
         dlabel_rect = dlabel.get_rect(center=(self.game_state.width // 2, diff_y - 18))
         self.screen.blit(dlabel, dlabel_rect)
 
-        slider_hint = self.font_small.render("Drag sliders or use ←/→ for night length, A/D for difficulty", True, (150, 180, 200))
+        slider_hint = self.font_small.render("Drag sliders or use ?/? for night length, A/D for difficulty", True, (150, 180, 200))
         hint_rect2 = slider_hint.get_rect(center=(self.game_state.width // 2, int(self.game_state.height * 0.94)))
         self.screen.blit(slider_hint, hint_rect2)
 
-        # Subtle static for creepy vibe
-        self.apply_creepy_static(0.05)
+# Subtle static for creepy vibe
+        self.apply_creepy_static(0.15)
 
     def draw_jumpscare(self):
         """Draw jumpscare screen with enhanced effects"""
@@ -3813,6 +3843,9 @@ class Game:
                 # Handle window resize
                 self.window_width = event.w
                 self.window_height = event.h
+                if not self.fullscreen:
+                    self.windowed_width = event.w
+                    self.windowed_height = event.h
                 self.screen = pygame.display.set_mode((event.w, event.h), pygame.RESIZABLE)
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 # ToS checkbox handling
@@ -3929,6 +3962,24 @@ class Game:
                     elif key == "d":
                         step = 0.05
                         self.difficulty = self.clamp(self.difficulty + step, self.difficulty_min, self.difficulty_max)
+                    elif key == "m":
+                        self.toggle_music_mute()
+                        self.save_progress()
+                    elif key == "s":
+                        self.toggle_sfx_mute()
+                        self.save_progress()
+                    elif key == "f":
+                        self.toggle_fullscreen()
+                    elif key == "t":
+                        self.toggle_skip_tutorial()
+                        self.save_progress()
+                    elif key == "r":
+                        now = time.time()
+                        if now - self.last_reset_request <= 2.0:
+                            self.reset_save_data()
+                            self.last_reset_request = 0.0
+                        else:
+                            self.last_reset_request = now
 
                 elif self.game_state.state == "playing":
                     if key == "q":

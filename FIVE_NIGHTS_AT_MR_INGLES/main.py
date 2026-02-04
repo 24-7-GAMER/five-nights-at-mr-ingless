@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Five Nights at Mr Ingles's (Pygame)
-LUA -> PYTHON PORT (this took 6 way too long)
+LUA -> PYTHON PORT (this took way too long)
 """
 
 import sys

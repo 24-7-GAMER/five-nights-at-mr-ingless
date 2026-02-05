@@ -1261,7 +1261,7 @@ class Game:
                         hallway_entry_delay=jitter(2.6, 0.4),
                         aggression_ramp=jitter(0.22, 0.06),
                         rng=self.rng,
-                        size_multiplier=0.85),
+                        size_multiplier=0.45),
             Animatronic("Librarian", "Stage", jitter(0.32, 0.05), jitter(6.8, 0.6), "teleport",
                         attack_side="left",
                         patrol_route=["Stage", "Dining Area", "Cafeteria", "Library"],

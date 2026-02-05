@@ -10,6 +10,19 @@ import shutil
 import subprocess
 from collections import deque
 
+def set_terminal_progress(progress):
+    """Update Windows Terminal progress bar (OSC 9;4)."""
+    progress = max(0.0, min(1.0, progress))
+    percent = int(progress * 100)
+    # Works in Windows Terminal and some modern terminals
+    sys.stdout.write(f"\x1b]9;4;1;{percent}\x07")
+    sys.stdout.flush()
+
+def clear_terminal_progress():
+    """Clear Windows Terminal progress bar (OSC 9;4)."""
+    sys.stdout.write("\x1b]9;4;0\x07")
+    sys.stdout.flush()
+
 def render_progress(progress, message=""):
     """Render a single overall progress bar in-place."""
     progress = max(0.0, min(1.0, progress))
@@ -20,7 +33,9 @@ def render_progress(progress, message=""):
     line = f"[{bar}] {percent:3d}%"
     if message:
         line += f" {message}"
-    print("\r" + line, end="", flush=True)
+    # Clear the line to avoid leftover text
+    print("\r\x1b[2K" + line, end="", flush=True)
+    set_terminal_progress(progress)
 
 def main():
     """Build the executable with error handling"""
@@ -199,6 +214,7 @@ def main():
             print("\nWarning: Expected executable not found")
             print(f"Looking for: {exe_path}")
             print("Check the dist/ folder manually")
+        clear_terminal_progress()
         
     except KeyboardInterrupt:
         print("\nBuild cancelled by user")

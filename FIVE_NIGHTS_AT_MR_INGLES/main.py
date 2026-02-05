@@ -665,6 +665,9 @@ class AssetManager:
 
     def load_sound(self, name, path):
         """Safely load a sound"""
+        if pygame.mixer.get_init() is None:
+            print("⚠️  WARNING: Audio mixer not initialized, skipping sound load")
+            return None
         full_path = os.path.join(BASE_DIR, path)
         if not os.path.exists(full_path):
             print(f"⚠️  WARNING: Sound not found: {full_path}")
@@ -742,6 +745,8 @@ class AssetManager:
 
     def play_sound(self, name):
         """Play a sound effect"""
+        if pygame.mixer.get_init() is None:
+            return
         if self.sfx_muted:
             return
         if name in self.sounds:
@@ -750,6 +755,8 @@ class AssetManager:
 
     def play_music(self, name, loops=-1):
         """Play music (streaming)"""
+        if pygame.mixer.get_init() is None:
+            return
         self.last_music = name
         if self.music_muted:
             return
@@ -769,6 +776,8 @@ class AssetManager:
 
     def stop_music(self):
         """Stop current music"""
+        if pygame.mixer.get_init() is None:
+            return
         pygame.mixer.music.stop()
         self.current_music = None
 
@@ -797,10 +806,13 @@ class Game:
     """Main game engine"""
     def __init__(self):
         pygame.init()
-        pygame.mixer.init()
+        try:
+            pygame.mixer.init()
+        except Exception as e:
+            print(f"⚠️  Warning: Audio mixer failed to initialize: {e}")
 
         # Create resizable window
-        self.screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.RESIZABLE)
+        self.display_surface = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.RESIZABLE)
         pygame.display.set_caption(WINDOW_TITLE)
         self.clock = pygame.time.Clock()
         self.running = True
@@ -810,9 +822,8 @@ class Game:
         self.window_height = WINDOW_HEIGHT
         self.windowed_width = WINDOW_WIDTH
         self.windowed_height = WINDOW_HEIGHT
-        # Render to this surface at fixed resolution, then scale to screen
-        self.render_surface = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT))
-        # NOTE: Screen swap moved to AFTER asset loading (see below)
+        # Render to this surface at fixed resolution, then scale to display
+        self.screen = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT))
 
         # Game components
         self.game_state = GameState()
@@ -821,6 +832,11 @@ class Game:
         self.cameras = CameraSystem()
         self.jumpscare = Jumpscare()
         self.assets = AssetManager()
+
+        # Runtime safety logging
+        self.error_log_path = os.path.join(BASE_DIR, "runtime_errors.log")
+        self.runtime_error_count = 0
+        self.last_error_time = 0.0
 
         # Animatronics list
         self.animatronics = []
@@ -925,6 +941,7 @@ class Game:
         self.skip_tutorial = False
         self.fullscreen = False
         self.last_reset_request = 0.0
+        self.fps_cap_enabled = True
 
         # Intro sequence (Night 1)
         self.intro_messages = []
@@ -965,8 +982,6 @@ class Game:
         self.assets.load_all_assets()
         print("✅ Assets loaded")
         
-        # NOW do the screen swap (after assets are loaded so convert_alpha() works)
-        self.screen, self.render_surface = self.render_surface, self.screen
         print("🖥️  Rendering surface initialized")
         
         self.load_save()
@@ -981,6 +996,8 @@ class Game:
     def scale_mouse_pos(self, pos):
         """Scale mouse position from window coordinates to game coordinates"""
         mx, my = pos
+        if self.window_width <= 0 or self.window_height <= 0:
+            return (0, 0)
         # Calculate scale factors
         scale_x = WINDOW_WIDTH / self.window_width
         scale_y = WINDOW_HEIGHT / self.window_height
@@ -999,6 +1016,8 @@ class Game:
     
     def scale_and_blit_to_screen(self):
         """Scale the render surface to the actual window while maintaining aspect ratio"""
+        if self.window_width <= 0 or self.window_height <= 0:
+            return
         # Calculate scale to fit window while maintaining aspect ratio
         scale_x = self.window_width / WINDOW_WIDTH
         scale_y = self.window_height / WINDOW_HEIGHT
@@ -1012,12 +1031,12 @@ class Game:
         x = (self.window_width - scaled_width) // 2
         y = (self.window_height - scaled_height) // 2
         
-        # Fill screen with black bars
-        self.render_surface.fill((0, 0, 0))
+        # Fill display with black bars
+        self.display_surface.fill((0, 0, 0))
         
         # Scale and blit the game surface
         scaled_surface = pygame.transform.scale(self.screen, (scaled_width, scaled_height))
-        self.render_surface.blit(scaled_surface, (x, y))
+        self.display_surface.blit(scaled_surface, (x, y))
     
     def set_status(self, msg=""):
         """Set status message"""
@@ -1195,6 +1214,8 @@ class Game:
                         self.assets.set_sfx_muted(bool(data.get("sfx_muted")))
                     if "skip_tutorial" in data:
                         self.skip_tutorial = bool(data.get("skip_tutorial"))
+                    if "fps_cap_enabled" in data:
+                        self.fps_cap_enabled = bool(data.get("fps_cap_enabled"))
             except:
                 self.game_state.max_night_unlocked = 1
         else:
@@ -1209,6 +1230,7 @@ class Game:
             "music_muted": self.assets.music_muted,
             "sfx_muted": self.assets.sfx_muted,
             "skip_tutorial": self.skip_tutorial,
+            "fps_cap_enabled": self.fps_cap_enabled,
         }
         try:
             with open(SAVE_FILE, 'w') as f:
@@ -1367,14 +1389,14 @@ class Game:
         if self.fullscreen:
             self.windowed_width = self.window_width
             self.windowed_height = self.window_height
-            self.screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
+            self.display_surface = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
             info = pygame.display.Info()
             self.window_width = info.current_w
             self.window_height = info.current_h
         else:
             self.window_width = self.windowed_width
             self.window_height = self.windowed_height
-            self.screen = pygame.display.set_mode((self.window_width, self.window_height), pygame.RESIZABLE)
+            self.display_surface = pygame.display.set_mode((self.window_width, self.window_height), pygame.RESIZABLE)
 
     def toggle_music_mute(self):
         """Toggle music mute"""
@@ -1390,6 +1412,10 @@ class Game:
         """Toggle tutorial skip on Night 1"""
         self.skip_tutorial = not self.skip_tutorial
 
+    def toggle_fps_cap(self):
+        """Toggle FPS cap"""
+        self.fps_cap_enabled = not self.fps_cap_enabled
+
     def reset_save_data(self):
         """Reset save file and in-memory progress"""
         if os.path.exists(SAVE_FILE):
@@ -1401,6 +1427,36 @@ class Game:
         self.high_scores = {}
         self.difficulty = 1.2
         self.save_progress()
+
+    def reset_settings(self):
+        """Reset settings to defaults (keeps progress)"""
+        self.difficulty = 1.2
+        self.game_state.seconds_per_hour = self.slider_max
+        self.skip_tutorial = False
+        self.assets.set_music_muted(False)
+        self.assets.set_sfx_muted(False)
+        self.fps_cap_enabled = True
+        self.save_progress()
+
+    def handle_runtime_error(self, err):
+        """Log runtime errors and keep the game running when possible"""
+        now = time.time()
+        if now - self.last_error_time > 10.0:
+            self.runtime_error_count = 0
+        self.runtime_error_count += 1
+        self.last_error_time = now
+        try:
+            import traceback
+            with open(self.error_log_path, "a", encoding="utf-8") as f:
+                f.write("\n" + "=" * 60 + "\n")
+                f.write(f"{time.ctime()}: {type(err).__name__}: {err}\n")
+                f.write(traceback.format_exc())
+        except:
+            pass
+
+        self.set_status("⚠️  A runtime error occurred. See runtime_errors.log")
+        if self.runtime_error_count >= 3:
+            self.running = False
 
     # =====================================================
     # UPDATE FUNCTIONS
@@ -3171,8 +3227,8 @@ class Game:
 
             # Lock indicator for unavailable nights
             if is_locked:
-                lock_text = self.font_small.render("🔒", True, (200, 100, 100))
-                lock_rect = lock_text.get_rect(center=(button_x + button_width // 2, button_y_actual + button_height + 30))
+                lock_text = self.font_small.render("LOCKED", True, (200, 100, 100))
+                lock_rect = lock_text.get_rect(center=(button_x + button_width // 2, button_y_actual + button_height + 28))
                 self.screen.blit(lock_text, lock_rect)
 
         # Instructions
@@ -3209,6 +3265,10 @@ class Game:
         hint_text = self.font_small.render("[1-5] Select  |  [ESC] Quit", True, (150, 180, 200))
         hint_rect = hint_text.get_rect(center=(self.game_state.width // 2, int(self.game_state.height * 0.90)))
         self.screen.blit(hint_text, hint_rect)
+
+        menu_hint = self.font_small.render("[M] Music  [S] SFX  [F] Fullscreen  [T] Skip Tutorial  [V] FPS Cap  [X] Reset Settings  [R] Reset Save", True, (120, 160, 190))
+        menu_hint_rect = menu_hint.get_rect(center=(self.game_state.width // 2, int(self.game_state.height * 0.965)))
+        self.screen.blit(menu_hint, menu_hint_rect)
 
         slider_width = 420
         slider_height = 8
@@ -3841,12 +3901,12 @@ class Game:
                 self.running = False
             elif event.type == pygame.VIDEORESIZE:
                 # Handle window resize
-                self.window_width = event.w
-                self.window_height = event.h
+                self.window_width = max(1, event.w)
+                self.window_height = max(1, event.h)
                 if not self.fullscreen:
-                    self.windowed_width = event.w
-                    self.windowed_height = event.h
-                self.screen = pygame.display.set_mode((event.w, event.h), pygame.RESIZABLE)
+                    self.windowed_width = self.window_width
+                    self.windowed_height = self.window_height
+                self.display_surface = pygame.display.set_mode((self.window_width, self.window_height), pygame.RESIZABLE)
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 # ToS checkbox handling
                 if self.game_state.state == "splash" and self.splash_stage == 1:
@@ -3973,6 +4033,11 @@ class Game:
                     elif key == "t":
                         self.toggle_skip_tutorial()
                         self.save_progress()
+                    elif key == "v":
+                        self.toggle_fps_cap()
+                        self.save_progress()
+                    elif key == "x":
+                        self.reset_settings()
                     elif key == "r":
                         now = time.time()
                         if now - self.last_reset_request <= 2.0:
@@ -4073,19 +4138,22 @@ class Game:
     def run(self):
         """Main game loop - Optimized for 60 FPS"""
         while self.running:
-            dt = self.clock.tick(FPS) / 1000.0
+            try:
+                dt = self.clock.tick(FPS if self.fps_cap_enabled else 0) / 1000.0
             
             # Skip heavy updates if running slow
-            if dt > 0.033:  # More than 30ms per frame
-                dt = 0.033  # Cap dt to prevent spiral of death
+                if dt > 0.033:  # More than 30ms per frame
+                    dt = 0.033  # Cap dt to prevent spiral of death
 
-            self.handle_input()
-            self.update(dt)
-            self.draw()
+                self.handle_input()
+                self.update(dt)
+                self.draw()
 
-            # Scale render surface to window with aspect ratio preservation
-            self.scale_and_blit_to_screen()
-            pygame.display.flip()
+                # Scale render surface to window with aspect ratio preservation
+                self.scale_and_blit_to_screen()
+                pygame.display.flip()
+            except Exception as err:
+                self.handle_runtime_error(err)
 
         pygame.quit()
         sys.exit()

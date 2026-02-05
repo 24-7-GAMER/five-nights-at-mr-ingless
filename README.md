@@ -221,6 +221,15 @@ python main.py
 - **M**: Menu
 - **ESC**: Quit
 
+### Menu Hotkeys (Functional Options)
+- **M**: Toggle music mute
+- **S**: Toggle SFX mute
+- **F**: Toggle fullscreen
+- **T**: Toggle tutorial skip (Night 1)
+- **V**: Toggle FPS cap
+- **X**: Reset settings to defaults (keeps progress)
+- **R** (double-tap within 2s): Reset save data
+
 ---
 
 ## Technical Details

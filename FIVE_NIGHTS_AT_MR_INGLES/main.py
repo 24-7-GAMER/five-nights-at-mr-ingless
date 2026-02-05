@@ -721,6 +721,7 @@ class AssetManager:
         self.load_image("intro_splash", "assets/img/intro_splashscreen.png")
         self.load_image("tos_splash", "assets/img/tos_splash.png")
         self.load_image("splash_truestory", "assets/img/splash_truestory.png")
+        self.load_image("night_complete", "assets/img/night_complete.png")
         # Animatronics
         self.load_image("anim_mr_ingles", "assets/img/anim_mr_ingles.png")
         self.load_image("anim_scary_ingles", "assets/img/anim_scary_ingles.png")  # Optional
@@ -1545,22 +1546,39 @@ class Game:
     def draw_particles(self):
         """Draw all active particles with enhanced visuals"""
         for particle in self.particles:
-            alpha = int(255 * particle['life'])
-            color = particle['color'][:3]
-            size = max(1, int(particle['size'] * particle['life']))
-            pos = (int(particle['x']), int(particle['y']))
-            
-            # Glow effect for particles
-            if particle.get('glow', True):
-                glow_size = size + 3
-                glow_surface = pygame.Surface((glow_size * 2, glow_size * 2), pygame.SRCALPHA)
-                pygame.draw.circle(glow_surface, (*color, alpha // 3), (glow_size, glow_size), glow_size)
-                self.screen.blit(glow_surface, (pos[0] - glow_size, pos[1] - glow_size))
-            
-            # Main particle
-            particle_surface = pygame.Surface((size * 2, size * 2), pygame.SRCALPHA)
-            pygame.draw.circle(particle_surface, (*color, alpha), (size, size), size)
-            self.screen.blit(particle_surface, (pos[0] - size, pos[1] - size))
+            try:
+                alpha = int(255 * particle['life'])
+                # Ensure alpha is in valid range
+                alpha = max(0, min(255, alpha))
+                
+                # Get color and ensure it's valid
+                color_raw = particle.get('color')
+                if color_raw is None:
+                    color = (255, 255, 255)  # Default white
+                else:
+                    # Extract first 3 components and ensure they're integers in range 0-255
+                    color = tuple(max(0, min(255, int(c))) for c in color_raw[:3])
+                
+                size = max(1, int(particle['size'] * particle['life']))
+                pos = (int(particle['x']), int(particle['y']))
+                
+                # Glow effect for particles
+                if particle.get('glow', True):
+                    glow_size = size + 3
+                    glow_surface = pygame.Surface((glow_size * 2, glow_size * 2), pygame.SRCALPHA)
+                    glow_color = (*color, max(0, min(255, alpha // 3)))
+                    pygame.draw.circle(glow_surface, glow_color, (glow_size, glow_size), glow_size)
+                    self.screen.blit(glow_surface, (pos[0] - glow_size, pos[1] - glow_size))
+                
+                # Main particle
+                particle_surface = pygame.Surface((size * 2, size * 2), pygame.SRCALPHA)
+                particle_color = (*color, alpha)
+                pygame.draw.circle(particle_surface, particle_color, (size, size), size)
+                self.screen.blit(particle_surface, (pos[0] - size, pos[1] - size))
+            except Exception as e:
+                # Skip problematic particles and log error
+                print(f"Error drawing particle: {e}")
+                continue
     
     def apply_screen_shake(self):
         """Get screen shake offset"""
@@ -3452,22 +3470,29 @@ class Game:
 
     def draw_win(self):
         """Draw win screen with enhanced effects"""
-        # Animated green gradient background
-        time_offset = time.time() * 0.3
-        for y in range(self.game_state.height):
-            ratio = y / self.game_state.height
-            wave = math.sin(time_offset + ratio * 2) * 0.1
-            r = int(10 * ratio + wave * 20)
-            g = int(40 + 60 * ratio + wave * 30)
-            b = int(10 * ratio + wave * 15)
-            pygame.draw.line(self.screen, (r, g, b), (0, y), (self.game_state.width, y))
+        # Draw night complete background image if available
+        night_complete_img = self.assets.images.get("night_complete")
+        if night_complete_img:
+            # Scale image to fit screen
+            img_scaled = pygame.transform.scale(night_complete_img, (self.game_state.width, self.game_state.height))
+            self.screen.blit(img_scaled, (0, 0))
+        else:
+            # Fallback to animated green gradient background if image not available
+            time_offset = time.time() * 0.3
+            for y in range(self.game_state.height):
+                ratio = y / self.game_state.height
+                wave = math.sin(time_offset + ratio * 2) * 0.1
+                r = int(10 * ratio + wave * 20)
+                g = int(40 + 60 * ratio + wave * 30)
+                b = int(10 * ratio + wave * 15)
+                pygame.draw.line(self.screen, (r, g, b), (0, y), (self.game_state.width, y))
 
-        # Pulsing green overlay with enhanced effect
-        pulse = math.sin(time.time() * 2) * 0.3 + 0.5
-        win_surface = pygame.Surface((self.game_state.width, self.game_state.height))
-        win_surface.set_alpha(int(120 * pulse))
-        win_surface.fill((100, 255, 100))
-        self.screen.blit(win_surface, (0, 0))
+            # Pulsing green overlay with enhanced effect
+            pulse = math.sin(time.time() * 2) * 0.3 + 0.5
+            win_surface = pygame.Surface((self.game_state.width, self.game_state.height))
+            win_surface.set_alpha(int(120 * pulse))
+            win_surface.fill((100, 255, 100))
+            self.screen.blit(win_surface, (0, 0))
         
         # Celebratory particles
         if not hasattr(self, 'win_particles_spawned') or not self.win_particles_spawned:
@@ -3508,9 +3533,15 @@ class Game:
             int(self.game_state.height * 0.40)))
         self.screen.blit(survived_text, survived_rect)
         
-        # Performance score and stats
+        # Performance score and stats - Display in bottom left corner
         score_text = self.font_medium.render(f"Performance Score: {self.performance_score}", True, (255, 255, 150))
-        score_rect = score_text.get_rect(center=(self.game_state.width // 2, int(self.game_state.height * 0.50)))
+        score_rect = score_text.get_rect(topleft=(20, self.game_state.height - 80))
+        # Draw semi-transparent background for readability
+        bg_rect = score_rect.inflate(20, 20)
+        bg_surface = pygame.Surface((bg_rect.width, bg_rect.height))
+        bg_surface.set_alpha(200)
+        bg_surface.fill((0, 0, 0))
+        self.screen.blit(bg_surface, bg_rect)
         self.screen.blit(score_text, score_rect)
         
         # Ending type message

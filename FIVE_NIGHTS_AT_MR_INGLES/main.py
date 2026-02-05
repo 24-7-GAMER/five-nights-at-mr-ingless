@@ -3494,20 +3494,6 @@ class Game:
             line_y = (y + int(self.game_state.scan_line_offset)) % self.game_state.height
             pygame.draw.line(self.screen, scan_line_color, (0, line_y), (self.game_state.width, line_y), 1)
         
-        # Draw particles (celebratory)
-        if not hasattr(self, 'win_particles_spawned') or not self.win_particles_spawned:
-            for _ in range(50):
-                self.add_particle(
-                    self.rng.randint(0, self.game_state.width),
-                    self.rng.randint(0, self.game_state.height),
-                    self.rng.uniform(-3, 3), self.rng.uniform(-5, 2),
-                    (100, 255, 100, 255), self.rng.randint(3, 8), self.rng.uniform(2.0, 4.0)
-                )
-            self.win_particles_spawned = True
-        
-        # Draw particles
-        self.draw_particles()
-        
         # ONLY show performance score in bottom left corner
         score_text = self.font_medium.render(f"Performance Score: {self.performance_score}", True, (255, 255, 150))
         score_rect = score_text.get_rect(topleft=(20, self.game_state.height - 80))

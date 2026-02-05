@@ -723,7 +723,7 @@ class AssetManager:
         self.load_image("anim_mr_ingles", "assets/img/anim_mr_ingles.png")
         self.load_image("anim_scary_ingles", "assets/img/anim_scary_ingles.png")  # Optional
         self.load_image("anim_guard_ingles", "assets/img/anim_guard_ingles.png")  # Optional
-        self.load_image("anim_janitor", "assets/img/anim_janitor.png")
+        self.load_image("anim_temi", "assets/img/anim_temi.png")
         self.load_image("anim_librarian", "assets/img/anim_librarian.png")
         self.load_image("anim_vent_crawler", "assets/img/anim_vent.png")  # Using existing anim_vent.png
         self.load_image("mr_ingles_office", "assets/img/mr_ingles_office.png")
@@ -1251,7 +1251,7 @@ class Game:
                         hallway_entry_delay=jitter(2.2, 0.4),
                         aggression_ramp=jitter(0.25, 0.06),
                         rng=self.rng),
-            Animatronic("Janitor Bot", "Backstage", jitter(0.34, 0.05), jitter(6.5, 0.7), "teleport",
+            Animatronic("Freaky Temi", "Backstage", jitter(0.34, 0.05), jitter(6.5, 0.7), "teleport",
                         attack_side="right",
                         patrol_route=["Backstage", "Kitchen", "East Hall", "Bathrooms"],
                         start_delay_minutes=self.rng.randint(5, 10),
@@ -2641,7 +2641,7 @@ class Game:
         sprites = {
             "Mr Ingles": "anim_scary_ingles" if is_attacking else "anim_mr_ingles",
             "Scary Mr Ingles": "anim_scary_ingles",
-            "Janitor Bot": "anim_janitor",
+            "Freaky Temi": "anim_temi",
             "Librarian": "anim_librarian",
             "Vent Crawler": "anim_vent_crawler",
             "Mr Hall": "mr_hall_anti_cheater",

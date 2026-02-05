@@ -720,6 +720,7 @@ class AssetManager:
         self.load_image("menu_background", "assets/img/menu_background.png")
         self.load_image("intro_splash", "assets/img/intro_splashscreen.png")
         self.load_image("tos_splash", "assets/img/tos_splash.png")
+        self.load_image("splash_truestory", "assets/img/splash_truestory.png")
         # Animatronics
         self.load_image("anim_mr_ingles", "assets/img/anim_mr_ingles.png")
         self.load_image("anim_scary_ingles", "assets/img/anim_scary_ingles.png")  # Optional
@@ -956,6 +957,7 @@ class Game:
         self.splash_stage = 0
         self.splash_sequence = [
             {"key": "intro_splash", "fade_in": 1.0, "hold": 1.0, "fade_out": 1.0},
+            {"key": "splash_truestory", "fade_in": 0.5, "hold": 1.0, "fade_out": 0.5},
             {"key": "tos_splash", "fade_in": 1.0, "hold": 3.5, "fade_out": 1.0},
         ]
         self.tos_agreed = False  # ToS checkbox state
@@ -2335,8 +2337,8 @@ class Game:
         total = current["fade_in"] + current["hold"] + current["fade_out"]
         self.splash_timer += dt
         
-        # For ToS screen (stage 1), require checkbox agreement
-        if self.splash_stage == 1:
+        # For ToS screen (stage 2), require checkbox agreement
+        if self.splash_stage == 2:
             # Don't auto-advance, wait for checkbox click
             if self.tos_agreed and self.splash_timer >= total:
                 self.splash_timer = 0.0
@@ -2425,8 +2427,8 @@ class Game:
         fade_surface.fill((0, 0, 0))
         self.screen.blit(fade_surface, (0, 0))
         
-        # Draw checkbox for ToS screen (stage 1)
-        if self.splash_stage == 1 and alpha > 0.5:
+        # Draw checkbox for ToS screen (stage 2)
+        if self.splash_stage == 2 and alpha > 0.5:
             checkbox_size = 30
             checkbox_x = int(self.game_state.width * 0.25)
             checkbox_y = int(self.game_state.height * 0.85)
@@ -3920,7 +3922,7 @@ class Game:
                 self.display_surface = pygame.display.get_surface()
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 # ToS checkbox handling
-                if self.game_state.state == "splash" and self.splash_stage == 1:
+                if self.game_state.state == "splash" and self.splash_stage == 2:
                     if self.tos_checkbox_rect:
                         mx, my = self.scale_mouse_pos(event.pos)
                         if self.tos_checkbox_rect.collidepoint(mx, my):

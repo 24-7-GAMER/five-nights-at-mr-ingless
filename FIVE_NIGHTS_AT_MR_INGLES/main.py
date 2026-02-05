@@ -259,7 +259,7 @@ class Animatronic:
     """Animatronic character with deterministic AI"""
     def __init__(self, name, start_room, base_aggro, base_interval, style="teleport",
                  attack_side="left", patrol_route=None, start_delay_minutes=0,
-                 hallway_entry_delay=2.0, aggression_ramp=0.25, rng=None):
+                 hallway_entry_delay=2.0, aggression_ramp=0.25, rng=None, size_multiplier=1.0):
         self.name = name
         self.room = start_room
         self.base_aggro = base_aggro
@@ -270,6 +270,7 @@ class Animatronic:
         self.style = style
         self.attack_side = attack_side
         self.rng = rng
+        self.size_multiplier = size_multiplier
         route = patrol_route or [start_room]
         if self.rng and len(route) > 1:
             # Rotate route per run to keep patterns unique without breaking graph
@@ -1251,13 +1252,14 @@ class Game:
                         hallway_entry_delay=jitter(2.2, 0.4),
                         aggression_ramp=jitter(0.25, 0.06),
                         rng=self.rng),
-            Animatronic("Freaky Temi", "Backstage", jitter(0.34, 0.05), jitter(6.5, 0.7), "teleport",
+            Animatronic("Freaky Temi", "Bathrooms", jitter(0.34, 0.05), jitter(6.5, 0.7), "teleport",
                         attack_side="right",
-                        patrol_route=["Backstage", "Kitchen", "East Hall", "Bathrooms"],
+                        patrol_route=["Bathrooms", "Kitchen", "East Hall", "Backstage"],
                         start_delay_minutes=self.rng.randint(5, 10),
                         hallway_entry_delay=jitter(2.6, 0.4),
                         aggression_ramp=jitter(0.22, 0.06),
-                        rng=self.rng),
+                        rng=self.rng,
+                        size_multiplier=0.85),
             Animatronic("Librarian", "Stage", jitter(0.32, 0.05), jitter(6.8, 0.6), "teleport",
                         attack_side="left",
                         patrol_route=["Stage", "Dining Area", "Cafeteria", "Library"],
@@ -2658,7 +2660,7 @@ class Game:
         sprite = self.get_anim_sprite(anim.name)
         if sprite:
             wobble = math.sin(current_time * 2 + anim.x * 0.01) * 0.02
-            scale = 0.4 * (self.game_state.width / 1280) * (1 + wobble)
+            scale = 0.4 * (self.game_state.width / 1280) * (1 + wobble) * anim.size_multiplier
             scaled = pygame.transform.scale(sprite, 
                 (int(sprite.get_width() * scale), int(sprite.get_height() * scale)))
             rect = scaled.get_rect(center=(anim.x, anim.y + wobble * 40))
@@ -2751,7 +2753,7 @@ class Game:
                 sprite = self.get_anim_sprite(anim.name)
                 if sprite:
                     wobble = math.sin(current_time * 2 + anim.x * 0.01) * 0.02
-                    scale = 0.45 * (self.game_state.width / 1280) * (1 + wobble)
+                    scale = 0.45 * (self.game_state.width / 1280) * (1 + wobble) * anim.size_multiplier
                     scaled = pygame.transform.scale(sprite,
                         (int(sprite.get_width() * scale), int(sprite.get_height() * scale)))
                     rect = scaled.get_rect(center=(anim.x, anim.y + wobble * 40))
@@ -3335,9 +3337,16 @@ class Game:
         # Add extreme chromatic aberration during jumpscare
         aberration_intensity = 1.0 + self.jumpscare.zoom * 2.0
         
+        # Find the animatronic causing the jumpscare to get its size multiplier
+        killer_size_multiplier = 1.0
+        for anim in self.animatronics:
+            if anim.name == self.jumpscare.killer:
+                killer_size_multiplier = anim.size_multiplier
+                break
+        
         sprite = self.get_anim_sprite(self.jumpscare.killer, is_attacking=True)
         if sprite:
-            base_scale = 0.6 * (self.game_state.width / 1280)
+            base_scale = 0.6 * (self.game_state.width / 1280) * killer_size_multiplier
             scale = base_scale * (1.0 + 2.2 * self.jumpscare.zoom)
             
             # Add shake to jumpscare sprite

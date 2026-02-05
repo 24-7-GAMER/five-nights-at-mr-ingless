@@ -3469,32 +3469,32 @@ class Game:
             self.apply_chromatic_aberration(aberration_intensity)
 
     def draw_win(self):
-        """Draw win screen with enhanced effects"""
-        # Draw night complete background image if available
+        """Draw win screen with only performance score"""
+        # Draw night complete background image with wobble effect
         night_complete_img = self.assets.images.get("night_complete")
         if night_complete_img:
+            # Calculate wobble effect
+            wobble = math.sin(time.time() * 1.5) * 2
+            wobble_y = int(wobble)
+            
             # Scale image to fit screen
             img_scaled = pygame.transform.scale(night_complete_img, (self.game_state.width, self.game_state.height))
-            self.screen.blit(img_scaled, (0, 0))
-        else:
-            # Fallback to animated green gradient background if image not available
-            time_offset = time.time() * 0.3
-            for y in range(self.game_state.height):
-                ratio = y / self.game_state.height
-                wave = math.sin(time_offset + ratio * 2) * 0.1
-                r = int(10 * ratio + wave * 20)
-                g = int(40 + 60 * ratio + wave * 30)
-                b = int(10 * ratio + wave * 15)
-                pygame.draw.line(self.screen, (r, g, b), (0, y), (self.game_state.width, y))
-
-            # Pulsing green overlay with enhanced effect
-            pulse = math.sin(time.time() * 2) * 0.3 + 0.5
-            win_surface = pygame.Surface((self.game_state.width, self.game_state.height))
-            win_surface.set_alpha(int(120 * pulse))
-            win_surface.fill((100, 255, 100))
-            self.screen.blit(win_surface, (0, 0))
+            self.screen.blit(img_scaled, (0, wobble_y))
+            
+            # Apply slight pulsing fade effect
+            fade_amount = int((math.sin(time.time() * 2) * 0.1 + 0.05) * 255)
+            fade_surface = pygame.Surface((self.game_state.width, self.game_state.height))
+            fade_surface.set_alpha(fade_amount)
+            fade_surface.fill((255, 255, 255))
+            self.screen.blit(fade_surface, (0, wobble_y))
         
-        # Celebratory particles
+        # Draw scan lines (static effect)
+        scan_line_color = (50, 50, 50)
+        for y in range(0, self.game_state.height, 3):
+            line_y = (y + int(self.game_state.scan_line_offset)) % self.game_state.height
+            pygame.draw.line(self.screen, scan_line_color, (0, line_y), (self.game_state.width, line_y), 1)
+        
+        # Draw particles (celebratory)
         if not hasattr(self, 'win_particles_spawned') or not self.win_particles_spawned:
             for _ in range(50):
                 self.add_particle(
@@ -3507,33 +3507,8 @@ class Game:
         
         # Draw particles
         self.draw_particles()
-
-        # Win text with scale effect and glow
-        scale_pulse = 1.0 + math.sin(time.time() * 3) * 0.1
         
-        # Glow layers
-        for i in range(3):
-            offset = (3 - i) * 2
-            glow_text = self.font_title.render("6 AM", True, (50, 150, 50))
-            glow_text.set_alpha(100 - i * 30)
-            glow_rect = glow_text.get_rect(center=(self.game_state.width // 2 + offset, 
-                                                   int(self.game_state.height * 0.25) + offset))
-            self.screen.blit(glow_text, glow_rect)
-        
-        win_text = self.font_title.render("6 AM", True, (100, 255, 100))
-        win_shadow = self.font_title.render("6 AM", True, (20, 80, 20))
-        win_rect = win_text.get_rect(center=(self.game_state.width // 2, int(self.game_state.height * 0.25)))
-        win_shadow_rect = win_shadow.get_rect(center=(self.game_state.width // 2 + 3, int(self.game_state.height * 0.25) + 3))
-        self.screen.blit(win_shadow, win_shadow_rect)
-        self.screen.blit(win_text, win_rect)
-
-        # Survived message
-        survived_text = self.font_large.render(f"Night {self.game_state.night} Survived!", True, (200, 255, 200))
-        survived_rect = survived_text.get_rect(center=(self.game_state.width // 2, 
-            int(self.game_state.height * 0.40)))
-        self.screen.blit(survived_text, survived_rect)
-        
-        # Performance score and stats - Display in bottom left corner
+        # ONLY show performance score in bottom left corner
         score_text = self.font_medium.render(f"Performance Score: {self.performance_score}", True, (255, 255, 150))
         score_rect = score_text.get_rect(topleft=(20, self.game_state.height - 80))
         # Draw semi-transparent background for readability
@@ -3543,48 +3518,6 @@ class Game:
         bg_surface.fill((0, 0, 0))
         self.screen.blit(bg_surface, bg_rect)
         self.screen.blit(score_text, score_rect)
-        
-        # Ending type message
-        ending_type = getattr(self.game_state, 'ending_type', 'standard')
-        ending_messages = {
-            'perfect': "★ PERFECT PERFORMANCE ★",
-            'victory': "All Nights Completed!",
-            'flawless': "Flawless Victory!",
-            'barely': "Close Call...",
-            'standard': "Well Done!"
-        }
-        ending_text = self.font_medium.render(ending_messages.get(ending_type, "Well Done!"), True, (255, 255, 100))
-        ending_rect = ending_text.get_rect(center=(self.game_state.width // 2, int(self.game_state.height * 0.56)))
-        self.screen.blit(ending_text, ending_rect)
-        
-        # Celebration text for final night
-        if self.game_state.night == 5:
-            special_text = self.font_medium.render("🎉 YOU BEAT THE GAME! 🎉", True, (255, 255, 100))
-            special_rect = special_text.get_rect(center=(self.game_state.width // 2, int(self.game_state.height * 0.63)))
-            pygame.draw.rect(self.screen, (80, 80, 0), (special_rect.x - 20, special_rect.y - 10,
-                             special_rect.width + 40, special_rect.height + 20), 0)
-            pygame.draw.rect(self.screen, (255, 255, 100), (special_rect.x - 20, special_rect.y - 10,
-                             special_rect.width + 40, special_rect.height + 20), 2)
-            self.screen.blit(special_text, special_rect)
-        
-        # High score display
-        night_key = self.game_state.night
-        if night_key in self.high_scores:
-            high_score = self.high_scores[night_key]
-            hs_y = int(self.game_state.height * 0.70) if self.game_state.night != 5 else int(self.game_state.height * 0.72)
-            if self.performance_score >= high_score:
-                hs_text = self.font_small.render(f"NEW HIGH SCORE!", True, (255, 255, 100))
-            else:
-                hs_text = self.font_small.render(f"High Score: {high_score}", True, (200, 200, 150))
-            hs_rect = hs_text.get_rect(center=(self.game_state.width // 2, hs_y))
-            self.screen.blit(hs_text, hs_rect)
-
-        # Restart instructions
-        restart_text = self.font_medium.render("[R] Next Night  |  [M] Menu",
-            True, (200, 255, 200))
-        restart_y = int(self.game_state.height * 0.78) if night_key in self.high_scores else int(self.game_state.height * 0.70)
-        restart_rect = restart_text.get_rect(center=(self.game_state.width // 2, restart_y))
-        self.screen.blit(restart_text, restart_rect)
 
     def draw(self):
         """Main draw loop"""

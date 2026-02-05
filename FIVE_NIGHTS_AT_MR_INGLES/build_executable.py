@@ -39,24 +39,45 @@ def main():
         print()
         
         # Step 1: Ensure dependencies
-        print_progress("Step 1/5: Checking build dependencies")
-        try:
-            import PyInstaller
-            print(f" ✓ Found version {PyInstaller.__version__}")
-        except ImportError:
-            print(" ✗ Not found, installing...")
-            subprocess.check_call([sys.executable, "-m", "pip", "install", "pyinstaller"], 
-                                stdout=subprocess.DEVNULL)
-            print_progress("Step 1/5: PyInstaller installed successfully")
-
+        print_progress("Step 1/5: Installing dependencies")
+        print()
+        
+        # Install game requirements first (pygame, etc.)
         requirements_file = "requirements.txt"
         if os.path.exists(requirements_file):
+            print(" Installing game dependencies...")
             try:
-                subprocess.check_call([sys.executable, "-m", "pip", "install", "-r", requirements_file],
-                                    stdout=subprocess.DEVNULL)
-                print(" ✓ Requirements installed")
+                result = subprocess.run(
+                    [sys.executable, "-m", "pip", "install", "-r", requirements_file],
+                    capture_output=True,
+                    text=True
+                )
+                if result.returncode == 0:
+                    print(" ✓ Game dependencies installed (pygame, etc.)")
+                else:
+                    print(f" ✗ Failed to install requirements!")
+                    print(f"   Error: {result.stderr}")
+                    print(f"\n   Please manually run: pip install -r requirements.txt")
+                    sys.exit(1)
             except Exception as e:
-                print(f" ⚠ Warning: Failed to install requirements: {e}")
+                print(f" ✗ Error installing requirements: {e}")
+                sys.exit(1)
+        else:
+            print(f" ⚠ Warning: {requirements_file} not found")
+        
+        # Install PyInstaller for building
+        print(" Installing PyInstaller...")
+        try:
+            import PyInstaller
+            print(f" ✓ PyInstaller already installed (v{PyInstaller.__version__})")
+        except ImportError:
+            try:
+                subprocess.check_call([sys.executable, "-m", "pip", "install", "pyinstaller"])
+                print(" ✓ PyInstaller installed successfully")
+            except subprocess.CalledProcessError as e:
+                print(f" ✗ Failed to install PyInstaller!")
+                print(f"   Please manually run: pip install pyinstaller")
+                sys.exit(1)
         
         time.sleep(0.3)
         print()

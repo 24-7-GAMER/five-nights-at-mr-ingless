@@ -15,6 +15,13 @@ def main():
     script_dir = os.path.dirname(os.path.abspath(__file__))
     main_script = os.path.join(script_dir, "main.py")
     
+    # Change to the script directory so relative paths work
+    try:
+        os.chdir(script_dir)
+        print(f"Working directory: {os.getcwd()}")
+    except Exception as e:
+        print(f"Warning: Could not change to script directory: {e}")
+    
     # Verify main.py exists
     if not os.path.exists(main_script):
         print(f"ERROR: Could not find main.py in {script_dir}")

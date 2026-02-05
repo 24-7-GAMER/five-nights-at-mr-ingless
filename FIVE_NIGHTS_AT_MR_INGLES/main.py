@@ -3118,6 +3118,9 @@ class Game:
 
     def draw_menu(self):
         """Draw main menu"""
+        # Clear screen first to prevent black screen issues
+        self.screen.fill((0, 0, 0))
+        
         # Draw background image if available, otherwise use gradient
         bg_img = self.assets.get_image("menu_background")
         if bg_img:
@@ -4153,8 +4156,8 @@ class Game:
         while self.running:
             try:
                 dt = self.clock.tick(FPS if self.fps_cap_enabled else 0) / 1000.0
-            
-            # Skip heavy updates if running slow
+                
+                # Skip heavy updates if running slow
                 if dt > 0.033:  # More than 30ms per frame
                     dt = 0.033  # Cap dt to prevent spiral of death
 

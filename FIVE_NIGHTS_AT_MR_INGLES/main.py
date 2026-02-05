@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Five Nights at Mr Ingles's (Pygame)
+Five Nights at Mr Ingles's (Game Engine - Pygame)
 LUA -> PYTHON PORT (this took way too long)
 """
 
@@ -3915,7 +3915,9 @@ class Game:
                 if not self.fullscreen:
                     self.windowed_width = self.window_width
                     self.windowed_height = self.window_height
-                self.display_surface = pygame.display.set_mode((self.window_width, self.window_height), pygame.RESIZABLE)
+                # Don't recreate surface - pygame handles resize automatically with RESIZABLE flag
+                # Just get the current display surface reference
+                self.display_surface = pygame.display.get_surface()
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 # ToS checkbox handling
                 if self.game_state.state == "splash" and self.splash_stage == 1:

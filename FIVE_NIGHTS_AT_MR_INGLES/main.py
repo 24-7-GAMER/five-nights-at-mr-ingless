@@ -737,6 +737,7 @@ class AssetManager:
         self.load_sound("door_open", "assets/sfx/door_open.ogg")
         self.load_sound("light_toggle", "assets/sfx/light_toggle.ogg")
         self.load_sound("jumpscare", "assets/sfx/jumpscare.ogg")
+        self.load_sound("faaah", "assets/sfx/faaah.mp3")
         self.load_sound("nice_try", "assets/sfx/NICE_TRY.mp3")
         self.load_sound("intro_msg", "assets/sfx/intro_msg.mp3")
         self.load_sound("bell_6am", "assets/sfx/bell_6am.ogg")
@@ -1975,7 +1976,11 @@ class Game:
                     self.game_state.state = "jumpscare"
                     self.add_screen_shake(15, 2.0)
                     self.add_color_overlay((255, 0, 0, 150), 2.0)
-                    self.assets.play_sound("jumpscare")
+                    # Play different sound for Freaky Temi
+                    if anim.name == "Freaky Temi":
+                        self.assets.play_sound("faaah")
+                    else:
+                        self.assets.play_sound("jumpscare")
                     self.assets.stop_music()
                     self.log_event(f"{anim.name} attacked")
                     break

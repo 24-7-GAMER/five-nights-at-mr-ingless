@@ -186,6 +186,33 @@ class Game:
 
 ---
 
+## 📦 Building Standalone Executable
+
+You can create a standalone `.exe` file (Windows) using the included build script:
+
+### Requirements
+- Python 3.7+ installed
+- All dependencies from `requirements.txt`
+
+### Build Steps
+1. Navigate to `FIVE_NIGHTS_AT_MR_INGLES/` directory
+2. Run: `python build_executable.py`
+3. Wait for the build to complete (~2-5 minutes)
+4. Find your executable in the `dist/` folder
+
+### Build Script Features
+- ✅ Automatically installs PyInstaller and dependencies
+- ✅ Bundles all assets into a single `.exe` file
+- ✅ Includes proper pygame/SDL2 DLL handling to avoid ordinal errors
+- ✅ Creates GUI application (no console window)
+- ✅ Shows progress bar during build
+- ✅ Cleans up previous builds automatically
+
+### Note on Antivirus
+Some antivirus software may flag PyInstaller executables as suspicious. This is a false positive common with Python packagers. You may need to add an exception for the build process.
+
+---
+
 ## Quick Start
 
 ### Installation

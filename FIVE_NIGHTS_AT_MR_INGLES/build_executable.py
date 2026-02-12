@@ -2,6 +2,10 @@
 """
 Build executable for Five Nights at Mr Ingles's
 Creates a standalone .exe with PyInstaller
+
+This script includes special handling for pygame to avoid the common
+"ordinal 380" DLL error on Windows by ensuring all pygame modules and
+SDL2 libraries are properly bundled.
 """
 
 import sys

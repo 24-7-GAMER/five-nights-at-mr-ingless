@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="FIVE_NIGHTS_AT_MR_INGLES/assets/img/title.png" width="300">
+  <img src="FIVE_NIGHTS_AT_MR_INGLES/assets/img/title.png" width="200">
 </p>
 
 

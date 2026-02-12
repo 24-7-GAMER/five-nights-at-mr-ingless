@@ -72,6 +72,16 @@ WINDOW_TITLE = "Five Nights at Mr Ingles's"
 FPS = 60
 SAVE_FILE = os.path.join(BASE_DIR, "mr_ingles_save.json")
 
+# Performance optimization constants
+MAX_PARTICLE_CACHE_SIZE = 50  # Max cached particle/glow surfaces
+MAX_OVERLAY_CACHE_SIZE = 100  # Max cached overlay surfaces
+MIN_CHROMATIC_ABERRATION = 0.3  # Skip chromatic aberration below this
+SCREEN_GLOW_CIRCLE_INTERVAL = 40  # Pixels between glow circles
+VHS_GLITCH_FREQUENCY = 0.05  # Random VHS glitch probability
+SCANLINE_SPACING = 8  # Pixels between camera scanlines
+STATIC_PARTICLE_COUNT_MULTIPLIER = 50  # Static particles = this * intensity
+CAMERA_NOISE_PARTICLE_COUNT = 15  # Noise particles in camera flash
+
 # =====================================================
 # GAME STATE
 # =====================================================
@@ -1120,7 +1130,7 @@ class Game:
         static_surface.set_alpha(int(255 * intensity * 0.4))
         
         # Reduced count for better performance
-        count = max(1, int(50 * intensity))  # Reduced from 100 to 50
+        count = max(1, int(STATIC_PARTICLE_COUNT_MULTIPLIER * intensity))
         for i in range(count):
             t = self.noise_phase + i * 0.17
             x = int((math.sin(t * 1.7) * 0.5 + 0.5) * self.game_state.width)
@@ -1602,7 +1612,7 @@ class Game:
                         pygame.draw.circle(glow_surface, (*color, 85), (glow_size, glow_size), glow_size)
                         self._cached_glow_surfaces[cache_key] = glow_surface
                         # Limit cache size
-                        if len(self._cached_glow_surfaces) > 50:
+                        if len(self._cached_glow_surfaces) > MAX_PARTICLE_CACHE_SIZE:
                             self._cached_glow_surfaces.pop(next(iter(self._cached_glow_surfaces)))
                     
                     glow_surface = self._cached_glow_surfaces[cache_key].copy()
@@ -1616,7 +1626,7 @@ class Game:
                     pygame.draw.circle(particle_surface, (*color, 255), (size, size), size)
                     self._cached_surfaces[cache_key] = particle_surface
                     # Limit cache size
-                    if len(self._cached_surfaces) > 50:
+                    if len(self._cached_surfaces) > MAX_PARTICLE_CACHE_SIZE:
                         self._cached_surfaces.pop(next(iter(self._cached_surfaces)))
                 
                 particle_surface = self._cached_surfaces[cache_key].copy()
@@ -1651,7 +1661,7 @@ class Game:
     
     def apply_chromatic_aberration(self, intensity=1.0):
         """Apply RGB split effect for horror atmosphere (optimized)"""
-        if intensity <= 0.3:  # Skip effect if very low intensity to save performance
+        if intensity <= MIN_CHROMATIC_ABERRATION:  # Skip effect if very low intensity to save performance
             return
         
         offset = int(3 * intensity)
@@ -1715,8 +1725,8 @@ class Game:
             line_surf.set_alpha(alpha)
             self.screen.blit(line_surf, (0, y))
         
-        # Random horizontal glitch lines (reduce frequency for performance)
-        if self.rng.random() < 0.05 * intensity:  # Reduced from 0.1 to 0.05
+        # Random horizontal glitch lines (reduced frequency for performance)
+        if self.rng.random() < VHS_GLITCH_FREQUENCY * intensity:
             glitch_y = self.rng.randint(0, self.game_state.height - 10)
             glitch_width = self.rng.randint(100, 400)
             glitch_x = self.rng.randint(0, self.game_state.width - glitch_width)
@@ -1728,7 +1738,7 @@ class Game:
                 glitch_surf.fill((255, 255, 255))
                 self._overlay_surfaces[glitch_key] = glitch_surf
                 # Limit cache size
-                if len(self._overlay_surfaces) > 100:
+                if len(self._overlay_surfaces) > MAX_OVERLAY_CACHE_SIZE:
                     self._overlay_surfaces.pop(next(iter(self._overlay_surfaces)))
             
             glitch_surf = self._overlay_surfaces[glitch_key]
@@ -1749,8 +1759,8 @@ class Game:
             center_y = self.game_state.height // 2
             max_radius = int(((self.game_state.width ** 2 + self.game_state.height ** 2) ** 0.5) / 2)
             
-            # Reduced circle count from every 20 pixels to every 40 pixels for 2x speedup
-            for i in range(0, max_radius, 40):
+            # Reduced circle count for 2x speedup
+            for i in range(0, max_radius, SCREEN_GLOW_CIRCLE_INTERVAL):
                 alpha = int(30 * (1 - i / max_radius))
                 if alpha > 0:
                     color = (255, 255, 200, alpha)
@@ -2926,8 +2936,8 @@ class Game:
         self.screen.blit(cam_text, (20, 20))
 
         # Enhanced animated scanlines with CRT effect (optimized - reduce scanline frequency)
-        scan_offset = int(time.time() * 50) % 8  # Changed from 4 to 8
-        for y in range(scan_offset, self.game_state.height, 8):  # Changed from 4 to 8 for 2x fewer scanlines
+        scan_offset = int(time.time() * 50) % SCANLINE_SPACING
+        for y in range(scan_offset, self.game_state.height, SCANLINE_SPACING):
             scanline_alpha = 15 + int(5 * math.sin(y * 0.1 + time.time() * 2))
             
             # Cache scanline surface
@@ -2983,8 +2993,8 @@ class Game:
             noise_surface.fill((0, 0, 0))  # Clear surface
             noise_surface.set_alpha(int(255 * 0.4 * self.office.cam_flash))
             
-            # Reduced noise particle count from 30 to 15 for better performance
-            for i in range(15):
+            # Reduced noise particle count for better performance
+            for i in range(CAMERA_NOISE_PARTICLE_COUNT):
                 t = self.noise_phase + i * 0.21
                 x = int((math.sin(t * 1.4) * 0.5 + 0.5) * self.game_state.width)
                 y = int((math.sin(t * 2.1 + 0.7) * 0.5 + 0.5) * self.game_state.height)

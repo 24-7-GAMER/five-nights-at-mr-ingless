@@ -207,6 +207,10 @@ You can create a standalone `.exe` file (Windows) using the included build scrip
 - ✅ Creates GUI application (no console window)
 - ✅ Shows progress bar during build
 - ✅ Cleans up previous builds automatically
+- ✅ Uses Windows-safe filename (no special characters)
+
+### Output
+The build script creates an executable named `Five Nights At Mr Ingles.exe` in the `dist/` folder. The filename uses spaces but no special characters to ensure maximum compatibility with Windows file systems and avoid permission errors.
 
 ### Note on Antivirus
 Some antivirus software may flag PyInstaller executables as suspicious. This is a false positive common with Python packagers. You may need to add an exception for the build process.

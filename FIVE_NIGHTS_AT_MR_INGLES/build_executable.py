@@ -209,8 +209,11 @@ def main():
         
         update_progress(0.97, "Verifying output")
         
-        exe_path = os.path.join("dist", f"{safe_name}.exe")
-        desired_exe_path = os.path.join("dist", f"{desired_name}.exe")
+        # Handle both Windows (.exe) and Linux/Mac (no extension) executables
+        exe_ext = ".exe" if os.name == "nt" else ""
+        exe_path = os.path.join("dist", f"{safe_name}{exe_ext}")
+        desired_exe_path = os.path.join("dist", f"{desired_name}{exe_ext}")
+        
         if os.path.exists(exe_path):
             if os.path.exists(desired_exe_path):
                 os.remove(desired_exe_path)

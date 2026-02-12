@@ -986,6 +986,7 @@ class Game:
         self._minimap_dot_green = None
         self._minimap_dot_orange = None
         self._overlay_surfaces = {}
+        self._last_scaled_size = None  # Track window size for scale caching
         
         # Load everything
         print(f"📁 BASE_DIR: {BASE_DIR}")
@@ -2539,9 +2540,14 @@ class Game:
         else:
             alpha = 1.0 - ((t - current["fade_in"] - current["hold"]) / max(0.001, current["fade_out"]))
 
-        fade_surface = pygame.Surface((self.game_state.width, self.game_state.height))
+        fade_surface_key = f"fade_surface_{self.game_state.width}_{self.game_state.height}"
+        if fade_surface_key not in self._overlay_surfaces:
+            fade_surface = pygame.Surface((self.game_state.width, self.game_state.height))
+            fade_surface.fill((0, 0, 0))
+            self._overlay_surfaces[fade_surface_key] = fade_surface
+        
+        fade_surface = self._overlay_surfaces[fade_surface_key]
         fade_surface.set_alpha(int(255 * (1.0 - self.clamp(alpha, 0.0, 1.0))))
-        fade_surface.fill((0, 0, 0))
         self.screen.blit(fade_surface, (0, 0))
         
         # Draw checkbox for ToS screen (stage 2)
@@ -2811,39 +2817,53 @@ class Game:
                 x = self.game_state.width - scaled.get_width() + scaled.get_width() * slide
                 self.screen.blit(scaled, (int(x), 0))
 
-        # Light dim overlay
+        # Light dim overlay (optimized)
         if self.office.light_dim > 0:
-            dim_surface = pygame.Surface((self.game_state.width, self.game_state.height))
+            cache_key = f"dim_surface_{self.game_state.width}_{self.game_state.height}"
+            if cache_key not in self._overlay_surfaces:
+                dim_surface = pygame.Surface((self.game_state.width, self.game_state.height))
+                dim_surface.fill((0, 0, 0))
+                self._overlay_surfaces[cache_key] = dim_surface
+            
+            dim_surface = self._overlay_surfaces[cache_key]
             dim_surface.set_alpha(int(255 * self.office.light_dim))
-            dim_surface.fill((0, 0, 0))
             self.screen.blit(dim_surface, (0, 0))
         
-        # Flashlight brightness boost - bright white overlay when light is on with dynamic pulse
+        # Flashlight brightness boost - bright white overlay when light is on with dynamic pulse (optimized)
         if self.office.light_on:
+            cache_key = f"brightness_boost_{self.game_state.width}_{self.game_state.height}"
+            if cache_key not in self._overlay_surfaces:
+                brightness_boost = pygame.Surface((self.game_state.width, self.game_state.height))
+                brightness_boost.fill((255, 255, 200))  # Slight warm tint
+                self._overlay_surfaces[cache_key] = brightness_boost
+            
+            brightness_boost = self._overlay_surfaces[cache_key]
             pulse = math.sin(time.time() * 2) * 0.15 + 0.85
-            brightness_boost = pygame.Surface((self.game_state.width, self.game_state.height))
             brightness_boost.set_alpha(int(80 * pulse))  # Pulsing brightness boost
-            brightness_boost.fill((255, 255, 200))  # Slight warm tint
             self.screen.blit(brightness_boost, (0, 0))
 
-        # Simple edge vignette (no spiral)
-        vignette_surf = pygame.Surface((self.game_state.width, self.game_state.height), pygame.SRCALPHA)
+        # Simple edge vignette (optimized with caching)
+        cache_key = f"vignette_{self.game_state.width}_{self.game_state.height}"
+        if cache_key not in self._overlay_surfaces:
+            vignette_surf = pygame.Surface((self.game_state.width, self.game_state.height), pygame.SRCALPHA)
+            
+            # Darken edges with simple rectangles
+            edge_width = 150
+            for i in range(edge_width):
+                alpha = int(80 * (1 - i / edge_width) ** 2)
+                if alpha > 0:
+                    # Top and bottom
+                    pygame.draw.line(vignette_surf, (0, 0, 0, alpha), (0, i), (self.game_state.width, i))
+                    pygame.draw.line(vignette_surf, (0, 0, 0, alpha), (0, self.game_state.height - i - 1), 
+                                   (self.game_state.width, self.game_state.height - i - 1))
+                    # Left and right
+                    pygame.draw.line(vignette_surf, (0, 0, 0, alpha), (i, 0), (i, self.game_state.height))
+                    pygame.draw.line(vignette_surf, (0, 0, 0, alpha), (self.game_state.width - i - 1, 0), 
+                                   (self.game_state.width - i - 1, self.game_state.height))
+            
+            self._overlay_surfaces[cache_key] = vignette_surf
         
-        # Darken edges with simple rectangles
-        edge_width = 150
-        for i in range(edge_width):
-            alpha = int(80 * (1 - i / edge_width) ** 2)
-            if alpha > 0:
-                # Top and bottom
-                pygame.draw.line(vignette_surf, (0, 0, 0, alpha), (0, i), (self.game_state.width, i))
-                pygame.draw.line(vignette_surf, (0, 0, 0, alpha), (0, self.game_state.height - i - 1), 
-                               (self.game_state.width, self.game_state.height - i - 1))
-                # Left and right
-                pygame.draw.line(vignette_surf, (0, 0, 0, alpha), (i, 0), (i, self.game_state.height))
-                pygame.draw.line(vignette_surf, (0, 0, 0, alpha), (self.game_state.width - i - 1, 0), 
-                               (self.game_state.width - i - 1, self.game_state.height))
-        
-        self.screen.blit(vignette_surf, (0, 0))
+        self.screen.blit(self._overlay_surfaces[cache_key], (0, 0))
 
     def draw_office_view(self):
         """Draw office view with animatronics"""
@@ -2884,43 +2904,66 @@ class Game:
         cam_text = self.font_medium.render(f"CAM: {cam_name}", True, (0, 255, 255))
         self.screen.blit(cam_text, (20, 20))
 
-        # Enhanced animated scanlines with CRT effect
-        scan_offset = int(time.time() * 50) % 4
-        for y in range(scan_offset, self.game_state.height, 4):
+        # Enhanced animated scanlines with CRT effect (optimized - reduce scanline frequency)
+        scan_offset = int(time.time() * 50) % 8  # Changed from 4 to 8
+        for y in range(scan_offset, self.game_state.height, 8):  # Changed from 4 to 8 for 2x fewer scanlines
             scanline_alpha = 15 + int(5 * math.sin(y * 0.1 + time.time() * 2))
-            scanline = pygame.Surface((self.game_state.width, 2))
+            
+            # Cache scanline surface
+            cache_key = f"scanline_{self.game_state.width}"
+            if cache_key not in self._overlay_surfaces:
+                scanline = pygame.Surface((self.game_state.width, 2))
+                scanline.fill((0, 180, 200))
+                self._overlay_surfaces[cache_key] = scanline
+            
+            scanline = self._overlay_surfaces[cache_key]
             scanline.set_alpha(scanline_alpha)
-            scanline.fill((0, 180, 200))
             self.screen.blit(scanline, (0, y))
         
-        # CRT curvature effect (edge darkening)
-        crt_surf = pygame.Surface((self.game_state.width, self.game_state.height), pygame.SRCALPHA)
-        edge_width = 100
-        for i in range(edge_width):
-            alpha = int(100 * (1 - i / edge_width) ** 2)
-            # Left and right edges
-            pygame.draw.line(crt_surf, (0, 0, 0, alpha), (i, 0), (i, self.game_state.height))
-            pygame.draw.line(crt_surf, (0, 0, 0, alpha), 
-                           (self.game_state.width - i - 1, 0), 
-                           (self.game_state.width - i - 1, self.game_state.height))
-            # Top and bottom edges
-            pygame.draw.line(crt_surf, (0, 0, 0, alpha), (0, i), (self.game_state.width, i))
-            pygame.draw.line(crt_surf, (0, 0, 0, alpha), 
-                           (0, self.game_state.height - i - 1), 
-                           (self.game_state.width, self.game_state.height - i - 1))
-        self.screen.blit(crt_surf, (0, 0))
+        # CRT curvature effect (edge darkening) - cached
+        cache_key = f"crt_{self.game_state.width}_{self.game_state.height}"
+        if cache_key not in self._overlay_surfaces:
+            crt_surf = pygame.Surface((self.game_state.width, self.game_state.height), pygame.SRCALPHA)
+            edge_width = 100
+            for i in range(edge_width):
+                alpha = int(100 * (1 - i / edge_width) ** 2)
+                # Left and right edges
+                pygame.draw.line(crt_surf, (0, 0, 0, alpha), (i, 0), (i, self.game_state.height))
+                pygame.draw.line(crt_surf, (0, 0, 0, alpha), 
+                               (self.game_state.width - i - 1, 0), 
+                               (self.game_state.width - i - 1, self.game_state.height))
+                # Top and bottom edges
+                pygame.draw.line(crt_surf, (0, 0, 0, alpha), (0, i), (self.game_state.width, i))
+                pygame.draw.line(crt_surf, (0, 0, 0, alpha), 
+                               (0, self.game_state.height - i - 1), 
+                               (self.game_state.width, self.game_state.height - i - 1))
+            self._overlay_surfaces[cache_key] = crt_surf
+        
+        self.screen.blit(self._overlay_surfaces[cache_key], (0, 0))
 
-        # Static flash overlay
+        # Static flash overlay (optimized)
         if self.office.cam_flash > 0:
-            flash_surface = pygame.Surface((self.game_state.width, self.game_state.height))
+            cache_key = f"flash_surface_{self.game_state.width}_{self.game_state.height}"
+            if cache_key not in self._overlay_surfaces:
+                flash_surface = pygame.Surface((self.game_state.width, self.game_state.height))
+                flash_surface.fill((255, 255, 255))
+                self._overlay_surfaces[cache_key] = flash_surface
+            
+            flash_surface = self._overlay_surfaces[cache_key]
             flash_surface.set_alpha(int(255 * 0.8 * self.office.cam_flash))
-            flash_surface.fill((255, 255, 255))
             self.screen.blit(flash_surface, (0, 0))
 
-            # Random noise
-            noise_surface = pygame.Surface((self.game_state.width, self.game_state.height))
+            # Random noise (optimized)
+            cache_key_noise = f"noise_surface_{self.game_state.width}_{self.game_state.height}"
+            if cache_key_noise not in self._overlay_surfaces:
+                self._overlay_surfaces[cache_key_noise] = pygame.Surface((self.game_state.width, self.game_state.height))
+            
+            noise_surface = self._overlay_surfaces[cache_key_noise]
+            noise_surface.fill((0, 0, 0))  # Clear surface
             noise_surface.set_alpha(int(255 * 0.4 * self.office.cam_flash))
-            for i in range(30):
+            
+            # Reduced noise particle count from 30 to 15 for better performance
+            for i in range(15):
                 t = self.noise_phase + i * 0.21
                 x = int((math.sin(t * 1.4) * 0.5 + 0.5) * self.game_state.width)
                 y = int((math.sin(t * 2.1 + 0.7) * 0.5 + 0.5) * self.game_state.height)
@@ -3660,14 +3703,20 @@ class Game:
         if self.static_intensity > 0:
             self.apply_creepy_static(self.static_intensity)
         
-        # Enhanced low power flickering with more dramatic effects
+        # Enhanced low power flickering with more dramatic effects (optimized)
         if self.power.current < 20 and self.power.current > 0:
             flicker_speed = 20 if self.power.current < 10 else 10
             if int(time.time() * flicker_speed) % 2 == 0:
-                flicker = pygame.Surface((self.game_state.width, self.game_state.height))
+                # Cache flicker surface
+                cache_key = f"flicker_{self.game_state.width}_{self.game_state.height}"
+                if cache_key not in self._overlay_surfaces:
+                    flicker = pygame.Surface((self.game_state.width, self.game_state.height))
+                    flicker.fill((255, 100, 0))
+                    self._overlay_surfaces[cache_key] = flicker
+                
+                flicker = self._overlay_surfaces[cache_key]
                 flicker_alpha = 40 if self.power.current < 10 else 30
                 flicker.set_alpha(flicker_alpha)
-                flicker.fill((255, 100, 0))
                 self.screen.blit(flicker, (0, 0))
                 
                 # Add spark particles during critical power
@@ -3681,10 +3730,16 @@ class Game:
                         )
 
     def draw_pause(self):
-        """Draw pause overlay"""
-        overlay = pygame.Surface((self.game_state.width, self.game_state.height))
+        """Draw pause overlay (optimized)"""
+        # Cache pause overlay
+        cache_key = f"pause_overlay_{self.game_state.width}_{self.game_state.height}"
+        if cache_key not in self._overlay_surfaces:
+            overlay = pygame.Surface((self.game_state.width, self.game_state.height))
+            overlay.fill((10, 10, 20))
+            self._overlay_surfaces[cache_key] = overlay
+        
+        overlay = self._overlay_surfaces[cache_key]
         overlay.set_alpha(180)
-        overlay.fill((10, 10, 20))
         self.screen.blit(overlay, (0, 0))
 
         title = self.font_title.render("PAUSED", True, (200, 220, 255))

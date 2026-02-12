@@ -2,6 +2,10 @@
 """
 Build executable for Five Nights at Mr Ingles's
 Creates a standalone .exe with PyInstaller
+
+This script includes special handling for pygame to avoid the common
+"ordinal 380" DLL error on Windows by ensuring all pygame modules and
+SDL2 libraries are properly bundled.
 """
 
 import sys
@@ -140,6 +144,15 @@ def main():
             "--add-data", f"assets{data_sep}assets",  # Include assets folder
             "--icon", icon_path,            # Use title.png as icon
             "--clean",                      # Clean PyInstaller cache
+            # Fix for pygame ordinal 380 error - ensure all pygame modules are included
+            "--hidden-import", "pygame",
+            "--hidden-import", "pygame.mixer",
+            "--hidden-import", "pygame.font",
+            "--hidden-import", "pygame.display",
+            "--hidden-import", "pygame.time",
+            "--hidden-import", "pygame.image",
+            "--hidden-import", "pygame.transform",
+            "--collect-all", "pygame",      # Collect all pygame data files and DLLs
             "main.py"
         ]
         

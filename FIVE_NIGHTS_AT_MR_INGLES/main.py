@@ -72,6 +72,16 @@ WINDOW_TITLE = "Five Nights at Mr Ingles's"
 FPS = 60
 SAVE_FILE = os.path.join(BASE_DIR, "mr_ingles_save.json")
 
+# Performance optimization constants
+MAX_PARTICLE_CACHE_SIZE = 50  # Max cached particle/glow surfaces
+MAX_OVERLAY_CACHE_SIZE = 100  # Max cached overlay surfaces
+MIN_CHROMATIC_ABERRATION = 0.3  # Skip chromatic aberration below this
+SCREEN_GLOW_CIRCLE_INTERVAL = 40  # Pixels between glow circles
+VHS_GLITCH_FREQUENCY = 0.05  # Random VHS glitch probability
+SCANLINE_SPACING = 8  # Pixels between camera scanlines
+STATIC_PARTICLE_COUNT_MULTIPLIER = 50  # Static particles = this * intensity
+CAMERA_NOISE_PARTICLE_COUNT = 15  # Noise particles in camera flash
+
 # =====================================================
 # GAME STATE
 # =====================================================
@@ -980,6 +990,14 @@ class Game:
             {"title": "GOOD LUCK", "text": "Stay alert and aware\nUse cameras to track movement\nDon't waste power\nYou can do this"},
         ]
 
+        # Performance optimization: Cache frequently used surfaces
+        self._cached_surfaces = {}
+        self._cached_glow_surfaces = {}
+        self._minimap_dot_green = None
+        self._minimap_dot_orange = None
+        self._overlay_surfaces = {}
+        self._last_scaled_size = None  # Track window size for scale caching
+        
         # Load everything
         print(f"📁 BASE_DIR: {BASE_DIR}")
         print(f"📁 Assets path: {os.path.join(BASE_DIR, 'assets')}")
@@ -1101,10 +1119,18 @@ class Game:
         self.game_state.state = "anti_cheat"
     
     def apply_creepy_static(self, intensity=0.3):
-        """Apply creepy static/noise overlay"""
-        static_surface = pygame.Surface((self.game_state.width, self.game_state.height))
+        """Apply creepy static/noise overlay (optimized)"""
+        # Cache static surface
+        cache_key = f"static_{self.game_state.width}_{self.game_state.height}"
+        if cache_key not in self._overlay_surfaces:
+            self._overlay_surfaces[cache_key] = pygame.Surface((self.game_state.width, self.game_state.height))
+        
+        static_surface = self._overlay_surfaces[cache_key]
+        static_surface.fill((0, 0, 0))  # Clear surface
         static_surface.set_alpha(int(255 * intensity * 0.4))
-        count = max(1, int(100 * intensity))
+        
+        # Reduced count for better performance
+        count = max(1, int(STATIC_PARTICLE_COUNT_MULTIPLIER * intensity))
         for i in range(count):
             t = self.noise_phase + i * 0.17
             x = int((math.sin(t * 1.7) * 0.5 + 0.5) * self.game_state.width)
@@ -1116,17 +1142,22 @@ class Game:
         self.screen.blit(static_surface, (0, 0))
     
     def draw_minimap(self, opacity=255):
-        """Draw camera minimap showing room layout and animatronic positions"""
+        """Draw camera minimap showing room layout and animatronic positions (optimized)"""
         # Minimap dimensions
         minimap_width = 340
         minimap_height = 240
         minimap_x = self.game_state.width - minimap_width - 20
         minimap_y = 80
         
-        # Background panel with opacity
-        panel_surface = pygame.Surface((minimap_width, minimap_height))
+        # Background panel with opacity (cached)
+        cache_key = f"minimap_panel_{minimap_width}_{minimap_height}"
+        if cache_key not in self._overlay_surfaces:
+            panel_surface = pygame.Surface((minimap_width, minimap_height))
+            panel_surface.fill((10, 10, 30))
+            self._overlay_surfaces[cache_key] = panel_surface
+        
+        panel_surface = self._overlay_surfaces[cache_key]
         panel_surface.set_alpha(opacity)
-        panel_surface.fill((10, 10, 30))
         self.screen.blit(panel_surface, (minimap_x, minimap_y))
         
         # Border
@@ -1179,17 +1210,24 @@ class Game:
             label_rect = label_text.get_rect(center=pos)
             self.screen.blit(label_text, (label_rect.x - 2, label_rect.y - 3))
         
-        # Legend
+        # Legend (optimized with cached surfaces)
         legend_y = minimap_y + minimap_height - 25
-        green_dot = pygame.Surface((6, 6))
-        green_dot.fill((50, 255, 100))
-        self.screen.blit(green_dot, (minimap_x + 10, legend_y))
+        
+        # Create and cache green dot
+        if self._minimap_dot_green is None:
+            self._minimap_dot_green = pygame.Surface((6, 6))
+            self._minimap_dot_green.fill((50, 255, 100))
+        
+        self.screen.blit(self._minimap_dot_green, (minimap_x + 10, legend_y))
         legend_text = self.font_small.render("Current Cam", True, (150, 200, 150))
         self.screen.blit(legend_text, (minimap_x + 20, legend_y - 2))
         
-        orange_dot = pygame.Surface((6, 6))
-        orange_dot.fill((255, 150, 50))
-        self.screen.blit(orange_dot, (minimap_x + 150, legend_y))
+        # Create and cache orange dot
+        if self._minimap_dot_orange is None:
+            self._minimap_dot_orange = pygame.Surface((6, 6))
+            self._minimap_dot_orange.fill((255, 150, 50))
+        
+        self.screen.blit(self._minimap_dot_orange, (minimap_x + 150, legend_y))
         anim_text = self.font_small.render("Animatronic", True, (255, 180, 100))
         self.screen.blit(anim_text, (minimap_x + 160, legend_y - 2))
     
@@ -1545,7 +1583,7 @@ class Game:
         self.game_state.glow_intensity = 0.2 + math.sin(time.time() * 0.5) * 0.1
     
     def draw_particles(self):
-        """Draw all active particles with enhanced visuals"""
+        """Draw all active particles with enhanced visuals (optimized)"""
         for particle in self.particles:
             try:
                 alpha = int(255 * particle['life'])
@@ -1563,18 +1601,36 @@ class Game:
                 size = max(1, int(particle['size'] * particle['life']))
                 pos = (int(particle['x']), int(particle['y']))
                 
-                # Glow effect for particles
+                # Glow effect for particles (optimized with caching)
                 if particle.get('glow', True):
                     glow_size = size + 3
-                    glow_surface = pygame.Surface((glow_size * 2, glow_size * 2), pygame.SRCALPHA)
-                    glow_color = (*color, max(0, min(255, alpha // 3)))
-                    pygame.draw.circle(glow_surface, glow_color, (glow_size, glow_size), glow_size)
+                    cache_key = (glow_size, color)
+                    
+                    # Use cached glow surface if available
+                    if cache_key not in self._cached_glow_surfaces:
+                        glow_surface = pygame.Surface((glow_size * 2, glow_size * 2), pygame.SRCALPHA)
+                        pygame.draw.circle(glow_surface, (*color, 85), (glow_size, glow_size), glow_size)
+                        self._cached_glow_surfaces[cache_key] = glow_surface
+                        # Limit cache size
+                        if len(self._cached_glow_surfaces) > MAX_PARTICLE_CACHE_SIZE:
+                            self._cached_glow_surfaces.pop(next(iter(self._cached_glow_surfaces)))
+                    
+                    glow_surface = self._cached_glow_surfaces[cache_key].copy()
+                    glow_surface.set_alpha(alpha // 3)
                     self.screen.blit(glow_surface, (pos[0] - glow_size, pos[1] - glow_size))
                 
-                # Main particle
-                particle_surface = pygame.Surface((size * 2, size * 2), pygame.SRCALPHA)
-                particle_color = (*color, alpha)
-                pygame.draw.circle(particle_surface, particle_color, (size, size), size)
+                # Main particle (optimized with caching)
+                cache_key = (size, color)
+                if cache_key not in self._cached_surfaces:
+                    particle_surface = pygame.Surface((size * 2, size * 2), pygame.SRCALPHA)
+                    pygame.draw.circle(particle_surface, (*color, 255), (size, size), size)
+                    self._cached_surfaces[cache_key] = particle_surface
+                    # Limit cache size
+                    if len(self._cached_surfaces) > MAX_PARTICLE_CACHE_SIZE:
+                        self._cached_surfaces.pop(next(iter(self._cached_surfaces)))
+                
+                particle_surface = self._cached_surfaces[cache_key].copy()
+                particle_surface.set_alpha(alpha)
                 self.screen.blit(particle_surface, (pos[0] - size, pos[1] - size))
             except Exception as e:
                 # Skip problematic particles and log error
@@ -1590,29 +1646,52 @@ class Game:
         return 0, 0
     
     def apply_color_overlay(self):
-        """Apply color overlay to screen"""
+        """Apply color overlay to screen (optimized)"""
         if self.color_overlay:
-            overlay = pygame.Surface((self.game_state.width, self.game_state.height))
+            # Cache overlay surface
+            cache_key = f"color_overlay_{self.game_state.width}_{self.game_state.height}"
+            if cache_key not in self._overlay_surfaces:
+                overlay = pygame.Surface((self.game_state.width, self.game_state.height))
+                self._overlay_surfaces[cache_key] = overlay
+            
+            overlay = self._overlay_surfaces[cache_key]
             overlay.set_alpha(self.color_overlay[3] if len(self.color_overlay) > 3 else 128)
             overlay.fill(self.color_overlay[:3])
             self.screen.blit(overlay, (0, 0))
     
     def apply_chromatic_aberration(self, intensity=1.0):
-        """Apply RGB split effect for horror atmosphere"""
-        if intensity <= 0:
+        """Apply RGB split effect for horror atmosphere (optimized)"""
+        if intensity <= MIN_CHROMATIC_ABERRATION:  # Skip effect if very low intensity to save performance
             return
         
         offset = int(3 * intensity)
         if offset <= 0:
             return
         
-        # Create RGB channels with offsets
-        screen_copy = self.screen.copy()
-        red_surf = pygame.Surface((self.game_state.width, self.game_state.height))
-        green_surf = pygame.Surface((self.game_state.width, self.game_state.height))
-        blue_surf = pygame.Surface((self.game_state.width, self.game_state.height))
+        # Cache RGB channel surfaces
+        cache_key = f"chroma_surfaces_{self.game_state.width}_{self.game_state.height}"
+        if cache_key not in self._overlay_surfaces:
+            surfaces = {
+                'screen_copy': pygame.Surface((self.game_state.width, self.game_state.height)),
+                'red': pygame.Surface((self.game_state.width, self.game_state.height)),
+                'green': pygame.Surface((self.game_state.width, self.game_state.height)),
+                'blue': pygame.Surface((self.game_state.width, self.game_state.height))
+            }
+            self._overlay_surfaces[cache_key] = surfaces
+        
+        surfaces = self._overlay_surfaces[cache_key]
+        screen_copy = surfaces['screen_copy']
+        red_surf = surfaces['red']
+        green_surf = surfaces['green']
+        blue_surf = surfaces['blue']
+        
+        # Copy current screen
+        screen_copy.blit(self.screen, (0, 0))
         
         # Extract and shift channels
+        red_surf.fill((0, 0, 0))
+        green_surf.fill((0, 0, 0))
+        blue_surf.fill((0, 0, 0))
         red_surf.blit(screen_copy, (-offset, 0))
         green_surf.blit(screen_copy, (0, 0))
         blue_surf.blit(screen_copy, (offset, 0))
@@ -1624,48 +1703,74 @@ class Game:
         self.screen.blit(red_surf, (0, 0), special_flags=pygame.BLEND_ADD)
         
     def apply_vhs_effect(self, intensity=1.0):
-        """Apply VHS tracking lines and distortion"""
+        """Apply VHS tracking lines and distortion (optimized)"""
         if intensity <= 0:
             return
+        
+        # Cache VHS line surfaces to avoid recreating them each frame
+        line_height = 2 + int(intensity)
+        cache_key = f"vhs_line_{self.game_state.width}_{line_height}"
+        
+        if cache_key not in self._overlay_surfaces:
+            line_surf = pygame.Surface((self.game_state.width, line_height))
+            line_surf.fill((0, 0, 0))
+            self._overlay_surfaces[cache_key] = line_surf
+        
+        line_surf = self._overlay_surfaces[cache_key]
+        alpha = int(40 * intensity)
         
         # VHS tracking lines (horizontal distortion lines)
         for i in range(int(8 * intensity)):
             y = int((self.game_state.scan_line_offset + i * 90) % self.game_state.height)
-            line_height = 2 + int(intensity)
-            alpha = int(40 * intensity)
-            
-            line_surf = pygame.Surface((self.game_state.width, line_height))
             line_surf.set_alpha(alpha)
-            line_surf.fill((0, 0, 0))
             self.screen.blit(line_surf, (0, y))
         
-        # Random horizontal glitch lines
-        if self.rng.random() < 0.1 * intensity:
+        # Random horizontal glitch lines (reduced frequency for performance)
+        if self.rng.random() < VHS_GLITCH_FREQUENCY * intensity:
             glitch_y = self.rng.randint(0, self.game_state.height - 10)
             glitch_width = self.rng.randint(100, 400)
             glitch_x = self.rng.randint(0, self.game_state.width - glitch_width)
-            glitch_surf = pygame.Surface((glitch_width, 3))
+            
+            # Cache glitch surface
+            glitch_key = f"vhs_glitch_{glitch_width}"
+            if glitch_key not in self._overlay_surfaces:
+                glitch_surf = pygame.Surface((glitch_width, 3))
+                glitch_surf.fill((255, 255, 255))
+                self._overlay_surfaces[glitch_key] = glitch_surf
+                # Limit cache size
+                if len(self._overlay_surfaces) > MAX_OVERLAY_CACHE_SIZE:
+                    self._overlay_surfaces.pop(next(iter(self._overlay_surfaces)))
+            
+            glitch_surf = self._overlay_surfaces[glitch_key]
             glitch_surf.set_alpha(80)
-            glitch_surf.fill((255, 255, 255))
             self.screen.blit(glitch_surf, (glitch_x, glitch_y))
     
     def apply_screen_glow(self, intensity=1.0):
-        """Apply dynamic screen glow/bloom effect"""
+        """Apply dynamic screen glow/bloom effect (optimized)"""
         if intensity <= 0:
             return
         
-        # Create glow overlay with radial gradient
-        glow_surf = pygame.Surface((self.game_state.width, self.game_state.height), pygame.SRCALPHA)
-        center_x = self.game_state.width // 2
-        center_y = self.game_state.height // 2
-        max_radius = int(((self.game_state.width ** 2 + self.game_state.height ** 2) ** 0.5) / 2)
+        # Use cached glow surface if available
+        cache_key = f"screen_glow_{self.game_state.width}_{self.game_state.height}"
+        if cache_key not in self._overlay_surfaces:
+            # Create glow overlay with radial gradient (optimized - fewer circles)
+            glow_surf = pygame.Surface((self.game_state.width, self.game_state.height), pygame.SRCALPHA)
+            center_x = self.game_state.width // 2
+            center_y = self.game_state.height // 2
+            max_radius = int(((self.game_state.width ** 2 + self.game_state.height ** 2) ** 0.5) / 2)
+            
+            # Reduced circle count for 2x speedup
+            for i in range(0, max_radius, SCREEN_GLOW_CIRCLE_INTERVAL):
+                alpha = int(30 * (1 - i / max_radius))
+                if alpha > 0:
+                    color = (255, 255, 200, alpha)
+                    pygame.draw.circle(glow_surf, color, (center_x, center_y), max_radius - i, 40)
+            
+            self._overlay_surfaces[cache_key] = glow_surf
         
-        for i in range(0, max_radius, 20):
-            alpha = int(30 * intensity * (1 - i / max_radius))
-            if alpha > 0:
-                color = (255, 255, 200, alpha)
-                pygame.draw.circle(glow_surf, color, (center_x, center_y), max_radius - i, 20)
-        
+        # Apply with dynamic intensity (no copy needed - set and restore alpha)
+        glow_surf = self._overlay_surfaces[cache_key]
+        glow_surf.set_alpha(int(255 * intensity))
         self.screen.blit(glow_surf, (0, 0))
 
     def update_office_effects(self, dt):
@@ -2445,9 +2550,14 @@ class Game:
         else:
             alpha = 1.0 - ((t - current["fade_in"] - current["hold"]) / max(0.001, current["fade_out"]))
 
-        fade_surface = pygame.Surface((self.game_state.width, self.game_state.height))
+        fade_surface_key = f"fade_surface_{self.game_state.width}_{self.game_state.height}"
+        if fade_surface_key not in self._overlay_surfaces:
+            fade_surface = pygame.Surface((self.game_state.width, self.game_state.height))
+            fade_surface.fill((0, 0, 0))
+            self._overlay_surfaces[fade_surface_key] = fade_surface
+        
+        fade_surface = self._overlay_surfaces[fade_surface_key]
         fade_surface.set_alpha(int(255 * (1.0 - self.clamp(alpha, 0.0, 1.0))))
-        fade_surface.fill((0, 0, 0))
         self.screen.blit(fade_surface, (0, 0))
         
         # Draw checkbox for ToS screen (stage 2)
@@ -2655,11 +2765,16 @@ class Game:
     # =====================================================
 
     def draw_background(self):
-        """Draw office background"""
+        """Draw office background (optimized with caching)"""
         office_img = self.assets.get_image("office")
         if office_img:
-            scaled = pygame.transform.scale(office_img, (self.game_state.width, self.game_state.height))
-            self.screen.blit(scaled, (0, 0))
+            # Cache scaled background image
+            cache_key = f"office_bg_{self.game_state.width}_{self.game_state.height}"
+            if cache_key not in self._overlay_surfaces:
+                scaled = pygame.transform.scale(office_img, (self.game_state.width, self.game_state.height))
+                self._overlay_surfaces[cache_key] = scaled
+            
+            self.screen.blit(self._overlay_surfaces[cache_key], (0, 0))
         else:
             self.screen.fill((12, 12, 12))
 
@@ -2694,14 +2809,20 @@ class Game:
             pygame.draw.circle(self.screen, (255, 0, 0), (int(anim.x), int(anim.y)), 25)
 
     def draw_office_overlays(self):
-        """Draw door and light overlays"""
+        """Draw door and light overlays (optimized with caching)"""
         # Left door
         if (self.office.door_left_closed or self.office.door_left_progress > 0.01):
             door_img = self.assets.get_image("door_left")
             if door_img:
-                scale = self.game_state.height / door_img.get_height()
-                scaled = pygame.transform.scale(door_img, 
-                    (int(door_img.get_width() * scale), int(door_img.get_height() * scale)))
+                # Cache scaled door image
+                cache_key = f"door_left_{self.game_state.height}"
+                if cache_key not in self._overlay_surfaces:
+                    scale = self.game_state.height / door_img.get_height()
+                    scaled = pygame.transform.scale(door_img, 
+                        (int(door_img.get_width() * scale), int(door_img.get_height() * scale)))
+                    self._overlay_surfaces[cache_key] = scaled
+                
+                scaled = self._overlay_surfaces[cache_key]
                 # When progress=0 (open): x=-width, when progress=1 (closed): x=0
                 x = -scaled.get_width() + scaled.get_width() * self.office.door_left_progress
                 self.screen.blit(scaled, (int(x), 0))
@@ -2710,46 +2831,66 @@ class Game:
         if (self.office.door_right_closed or self.office.door_right_progress > 0.01):
             door_img = self.assets.get_image("door_right")
             if door_img:
-                scale = self.game_state.height / door_img.get_height()
-                scaled = pygame.transform.scale(door_img,
-                    (int(door_img.get_width() * scale), int(door_img.get_height() * scale)))
+                # Cache scaled door image
+                cache_key = f"door_right_{self.game_state.height}"
+                if cache_key not in self._overlay_surfaces:
+                    scale = self.game_state.height / door_img.get_height()
+                    scaled = pygame.transform.scale(door_img,
+                        (int(door_img.get_width() * scale), int(door_img.get_height() * scale)))
+                    self._overlay_surfaces[cache_key] = scaled
+                
+                scaled = self._overlay_surfaces[cache_key]
                 slide = 1 - self.office.door_right_progress
                 x = self.game_state.width - scaled.get_width() + scaled.get_width() * slide
                 self.screen.blit(scaled, (int(x), 0))
 
-        # Light dim overlay
+        # Light dim overlay (optimized)
         if self.office.light_dim > 0:
-            dim_surface = pygame.Surface((self.game_state.width, self.game_state.height))
+            cache_key = f"dim_surface_{self.game_state.width}_{self.game_state.height}"
+            if cache_key not in self._overlay_surfaces:
+                dim_surface = pygame.Surface((self.game_state.width, self.game_state.height))
+                dim_surface.fill((0, 0, 0))
+                self._overlay_surfaces[cache_key] = dim_surface
+            
+            dim_surface = self._overlay_surfaces[cache_key]
             dim_surface.set_alpha(int(255 * self.office.light_dim))
-            dim_surface.fill((0, 0, 0))
             self.screen.blit(dim_surface, (0, 0))
         
-        # Flashlight brightness boost - bright white overlay when light is on with dynamic pulse
+        # Flashlight brightness boost - bright white overlay when light is on with dynamic pulse (optimized)
         if self.office.light_on:
+            cache_key = f"brightness_boost_{self.game_state.width}_{self.game_state.height}"
+            if cache_key not in self._overlay_surfaces:
+                brightness_boost = pygame.Surface((self.game_state.width, self.game_state.height))
+                brightness_boost.fill((255, 255, 200))  # Slight warm tint
+                self._overlay_surfaces[cache_key] = brightness_boost
+            
+            brightness_boost = self._overlay_surfaces[cache_key]
             pulse = math.sin(time.time() * 2) * 0.15 + 0.85
-            brightness_boost = pygame.Surface((self.game_state.width, self.game_state.height))
             brightness_boost.set_alpha(int(80 * pulse))  # Pulsing brightness boost
-            brightness_boost.fill((255, 255, 200))  # Slight warm tint
             self.screen.blit(brightness_boost, (0, 0))
 
-        # Simple edge vignette (no spiral)
-        vignette_surf = pygame.Surface((self.game_state.width, self.game_state.height), pygame.SRCALPHA)
+        # Simple edge vignette (optimized with caching)
+        cache_key = f"vignette_{self.game_state.width}_{self.game_state.height}"
+        if cache_key not in self._overlay_surfaces:
+            vignette_surf = pygame.Surface((self.game_state.width, self.game_state.height), pygame.SRCALPHA)
+            
+            # Darken edges with simple rectangles
+            edge_width = 150
+            for i in range(edge_width):
+                alpha = int(80 * (1 - i / edge_width) ** 2)
+                if alpha > 0:
+                    # Top and bottom
+                    pygame.draw.line(vignette_surf, (0, 0, 0, alpha), (0, i), (self.game_state.width, i))
+                    pygame.draw.line(vignette_surf, (0, 0, 0, alpha), (0, self.game_state.height - i - 1), 
+                                   (self.game_state.width, self.game_state.height - i - 1))
+                    # Left and right
+                    pygame.draw.line(vignette_surf, (0, 0, 0, alpha), (i, 0), (i, self.game_state.height))
+                    pygame.draw.line(vignette_surf, (0, 0, 0, alpha), (self.game_state.width - i - 1, 0), 
+                                   (self.game_state.width - i - 1, self.game_state.height))
+            
+            self._overlay_surfaces[cache_key] = vignette_surf
         
-        # Darken edges with simple rectangles
-        edge_width = 150
-        for i in range(edge_width):
-            alpha = int(80 * (1 - i / edge_width) ** 2)
-            if alpha > 0:
-                # Top and bottom
-                pygame.draw.line(vignette_surf, (0, 0, 0, alpha), (0, i), (self.game_state.width, i))
-                pygame.draw.line(vignette_surf, (0, 0, 0, alpha), (0, self.game_state.height - i - 1), 
-                               (self.game_state.width, self.game_state.height - i - 1))
-                # Left and right
-                pygame.draw.line(vignette_surf, (0, 0, 0, alpha), (i, 0), (i, self.game_state.height))
-                pygame.draw.line(vignette_surf, (0, 0, 0, alpha), (self.game_state.width - i - 1, 0), 
-                               (self.game_state.width - i - 1, self.game_state.height))
-        
-        self.screen.blit(vignette_surf, (0, 0))
+        self.screen.blit(self._overlay_surfaces[cache_key], (0, 0))
 
     def draw_office_view(self):
         """Draw office view with animatronics"""
@@ -2759,15 +2900,19 @@ class Game:
         self.draw_office_overlays()
 
     def draw_camera_feed(self):
-        """Draw camera feed"""
+        """Draw camera feed (optimized with caching)"""
         cam_name = self.cameras.current_camera()
         cam_key = f"cam_{cam_name.lower().replace(' ', '_')}"
         cam_img = self.assets.get_image(cam_key)
 
-        # Camera background
+        # Camera background (cached)
         if cam_img:
-            scaled = pygame.transform.scale(cam_img, (self.game_state.width, self.game_state.height))
-            self.screen.blit(scaled, (0, 0))
+            cache_key = f"cam_scaled_{cam_key}_{self.game_state.width}_{self.game_state.height}"
+            if cache_key not in self._overlay_surfaces:
+                scaled = pygame.transform.scale(cam_img, (self.game_state.width, self.game_state.height))
+                self._overlay_surfaces[cache_key] = scaled
+            
+            self.screen.blit(self._overlay_surfaces[cache_key], (0, 0))
         else:
             self.screen.fill((0, 0, 25))
 
@@ -2790,43 +2935,66 @@ class Game:
         cam_text = self.font_medium.render(f"CAM: {cam_name}", True, (0, 255, 255))
         self.screen.blit(cam_text, (20, 20))
 
-        # Enhanced animated scanlines with CRT effect
-        scan_offset = int(time.time() * 50) % 4
-        for y in range(scan_offset, self.game_state.height, 4):
+        # Enhanced animated scanlines with CRT effect (optimized - reduce scanline frequency)
+        scan_offset = int(time.time() * 50) % SCANLINE_SPACING
+        for y in range(scan_offset, self.game_state.height, SCANLINE_SPACING):
             scanline_alpha = 15 + int(5 * math.sin(y * 0.1 + time.time() * 2))
-            scanline = pygame.Surface((self.game_state.width, 2))
+            
+            # Cache scanline surface
+            cache_key = f"scanline_{self.game_state.width}"
+            if cache_key not in self._overlay_surfaces:
+                scanline = pygame.Surface((self.game_state.width, 2))
+                scanline.fill((0, 180, 200))
+                self._overlay_surfaces[cache_key] = scanline
+            
+            scanline = self._overlay_surfaces[cache_key]
             scanline.set_alpha(scanline_alpha)
-            scanline.fill((0, 180, 200))
             self.screen.blit(scanline, (0, y))
         
-        # CRT curvature effect (edge darkening)
-        crt_surf = pygame.Surface((self.game_state.width, self.game_state.height), pygame.SRCALPHA)
-        edge_width = 100
-        for i in range(edge_width):
-            alpha = int(100 * (1 - i / edge_width) ** 2)
-            # Left and right edges
-            pygame.draw.line(crt_surf, (0, 0, 0, alpha), (i, 0), (i, self.game_state.height))
-            pygame.draw.line(crt_surf, (0, 0, 0, alpha), 
-                           (self.game_state.width - i - 1, 0), 
-                           (self.game_state.width - i - 1, self.game_state.height))
-            # Top and bottom edges
-            pygame.draw.line(crt_surf, (0, 0, 0, alpha), (0, i), (self.game_state.width, i))
-            pygame.draw.line(crt_surf, (0, 0, 0, alpha), 
-                           (0, self.game_state.height - i - 1), 
-                           (self.game_state.width, self.game_state.height - i - 1))
-        self.screen.blit(crt_surf, (0, 0))
+        # CRT curvature effect (edge darkening) - cached
+        cache_key = f"crt_{self.game_state.width}_{self.game_state.height}"
+        if cache_key not in self._overlay_surfaces:
+            crt_surf = pygame.Surface((self.game_state.width, self.game_state.height), pygame.SRCALPHA)
+            edge_width = 100
+            for i in range(edge_width):
+                alpha = int(100 * (1 - i / edge_width) ** 2)
+                # Left and right edges
+                pygame.draw.line(crt_surf, (0, 0, 0, alpha), (i, 0), (i, self.game_state.height))
+                pygame.draw.line(crt_surf, (0, 0, 0, alpha), 
+                               (self.game_state.width - i - 1, 0), 
+                               (self.game_state.width - i - 1, self.game_state.height))
+                # Top and bottom edges
+                pygame.draw.line(crt_surf, (0, 0, 0, alpha), (0, i), (self.game_state.width, i))
+                pygame.draw.line(crt_surf, (0, 0, 0, alpha), 
+                               (0, self.game_state.height - i - 1), 
+                               (self.game_state.width, self.game_state.height - i - 1))
+            self._overlay_surfaces[cache_key] = crt_surf
+        
+        self.screen.blit(self._overlay_surfaces[cache_key], (0, 0))
 
-        # Static flash overlay
+        # Static flash overlay (optimized)
         if self.office.cam_flash > 0:
-            flash_surface = pygame.Surface((self.game_state.width, self.game_state.height))
+            cache_key = f"flash_surface_{self.game_state.width}_{self.game_state.height}"
+            if cache_key not in self._overlay_surfaces:
+                flash_surface = pygame.Surface((self.game_state.width, self.game_state.height))
+                flash_surface.fill((255, 255, 255))
+                self._overlay_surfaces[cache_key] = flash_surface
+            
+            flash_surface = self._overlay_surfaces[cache_key]
             flash_surface.set_alpha(int(255 * 0.8 * self.office.cam_flash))
-            flash_surface.fill((255, 255, 255))
             self.screen.blit(flash_surface, (0, 0))
 
-            # Random noise
-            noise_surface = pygame.Surface((self.game_state.width, self.game_state.height))
+            # Random noise (optimized)
+            cache_key_noise = f"noise_surface_{self.game_state.width}_{self.game_state.height}"
+            if cache_key_noise not in self._overlay_surfaces:
+                self._overlay_surfaces[cache_key_noise] = pygame.Surface((self.game_state.width, self.game_state.height))
+            
+            noise_surface = self._overlay_surfaces[cache_key_noise]
+            noise_surface.fill((0, 0, 0))  # Clear surface
             noise_surface.set_alpha(int(255 * 0.4 * self.office.cam_flash))
-            for i in range(30):
+            
+            # Reduced noise particle count for better performance
+            for i in range(CAMERA_NOISE_PARTICLE_COUNT):
                 t = self.noise_phase + i * 0.21
                 x = int((math.sin(t * 1.4) * 0.5 + 0.5) * self.game_state.width)
                 y = int((math.sin(t * 2.1 + 0.7) * 0.5 + 0.5) * self.game_state.height)
@@ -2845,7 +3013,7 @@ class Game:
             self.draw_office_view()
 
     def draw_hud(self):
-        """Draw heads-up display with enhanced visual effects"""
+        """Draw heads-up display with enhanced visual effects (optimized)"""
         # Power indicator with bar and glow
         power_val = int(self.power.current + 0.5)
         power_color = (255, 50, 50) if power_val <= 20 else (100, 255, 100) if power_val > 50 else (255, 200, 0)
@@ -2855,35 +3023,25 @@ class Game:
         bar_height = 20
         bar_x, bar_y = 20, self.game_state.height - 50
         
-        # Outer glow for power bar
+        # Outer glow for power bar (cached)
         if power_val <= 20:
-            glow_surf = pygame.Surface((bar_width + 20, bar_height + 10), pygame.SRCALPHA)
+            cache_key = f"power_glow_{bar_width}_{bar_height}"
+            if cache_key not in self._overlay_surfaces:
+                glow_surf = pygame.Surface((bar_width + 20, bar_height + 10), pygame.SRCALPHA)
+                self._overlay_surfaces[cache_key] = glow_surf
+            
+            glow_surf = self._overlay_surfaces[cache_key]
+            glow_surf.fill((0, 0, 0, 0))  # Clear
             pulse = math.sin(time.time() * 5) * 0.3 + 0.7
             pygame.draw.rect(glow_surf, (*power_color, int(80 * pulse)), (0, 0, bar_width + 20, bar_height + 10), border_radius=5)
             self.screen.blit(glow_surf, (bar_x - 10, bar_y - 5))
         
         pygame.draw.rect(self.screen, (40, 40, 40), (bar_x, bar_y, bar_width, bar_height), border_radius=3)
         
-        # Gradient fill for power bar
+        # Simplified power bar fill (solid color instead of gradient for performance)
         filled_width = int(bar_width * power_val / 100)
-        for i in range(filled_width):
-            ratio = i / max(1, filled_width)
-            if power_val <= 20:
-                # Red gradient when low
-                r = int(255 - ratio * 50)
-                g = int(50 + ratio * 30)
-                b = 50
-            elif power_val > 50:
-                # Green gradient when high
-                r = int(100 - ratio * 20)
-                g = int(255 - ratio * 50)
-                b = int(100 - ratio * 20)
-            else:
-                # Yellow gradient when medium
-                r = 255
-                g = int(200 - ratio * 50)
-                b = 0
-            pygame.draw.line(self.screen, (r, g, b), (bar_x + i, bar_y), (bar_x + i, bar_y + bar_height))
+        if filled_width > 0:
+            pygame.draw.rect(self.screen, power_color, (bar_x, bar_y, filled_width, bar_height), border_radius=3)
         
         pygame.draw.rect(self.screen, (150, 150, 150), (bar_x, bar_y, bar_width, bar_height), 2, border_radius=3)
         
@@ -3140,15 +3298,20 @@ class Game:
             self.screen.blit(text, rect)
 
     def draw_menu(self):
-        """Draw main menu"""
+        """Draw main menu (optimized with caching)"""
         # Clear screen first to prevent black screen issues
         self.screen.fill((0, 0, 0))
         
         # Draw background image if available, otherwise use gradient
         bg_img = self.assets.get_image("menu_background")
         if bg_img:
-            scaled_bg = pygame.transform.scale(bg_img, (self.game_state.width, self.game_state.height))
-            self.screen.blit(scaled_bg, (0, 0))
+            # Cache scaled menu background
+            cache_key = f"menu_bg_{self.game_state.width}_{self.game_state.height}"
+            if cache_key not in self._overlay_surfaces:
+                scaled_bg = pygame.transform.scale(bg_img, (self.game_state.width, self.game_state.height))
+                self._overlay_surfaces[cache_key] = scaled_bg
+            
+            self.screen.blit(self._overlay_surfaces[cache_key], (0, 0))
         else:
             # Fallback to gradient if no background image
             time_offset = time.time() * 0.5
@@ -3576,14 +3739,20 @@ class Game:
         if self.static_intensity > 0:
             self.apply_creepy_static(self.static_intensity)
         
-        # Enhanced low power flickering with more dramatic effects
+        # Enhanced low power flickering with more dramatic effects (optimized)
         if self.power.current < 20 and self.power.current > 0:
             flicker_speed = 20 if self.power.current < 10 else 10
             if int(time.time() * flicker_speed) % 2 == 0:
-                flicker = pygame.Surface((self.game_state.width, self.game_state.height))
+                # Cache flicker surface
+                cache_key = f"flicker_{self.game_state.width}_{self.game_state.height}"
+                if cache_key not in self._overlay_surfaces:
+                    flicker = pygame.Surface((self.game_state.width, self.game_state.height))
+                    flicker.fill((255, 100, 0))
+                    self._overlay_surfaces[cache_key] = flicker
+                
+                flicker = self._overlay_surfaces[cache_key]
                 flicker_alpha = 40 if self.power.current < 10 else 30
                 flicker.set_alpha(flicker_alpha)
-                flicker.fill((255, 100, 0))
                 self.screen.blit(flicker, (0, 0))
                 
                 # Add spark particles during critical power
@@ -3597,10 +3766,16 @@ class Game:
                         )
 
     def draw_pause(self):
-        """Draw pause overlay"""
-        overlay = pygame.Surface((self.game_state.width, self.game_state.height))
+        """Draw pause overlay (optimized)"""
+        # Cache pause overlay
+        cache_key = f"pause_overlay_{self.game_state.width}_{self.game_state.height}"
+        if cache_key not in self._overlay_surfaces:
+            overlay = pygame.Surface((self.game_state.width, self.game_state.height))
+            overlay.fill((10, 10, 20))
+            self._overlay_surfaces[cache_key] = overlay
+        
+        overlay = self._overlay_surfaces[cache_key]
         overlay.set_alpha(180)
-        overlay.fill((10, 10, 20))
         self.screen.blit(overlay, (0, 0))
 
         title = self.font_title.render("PAUSED", True, (200, 220, 255))

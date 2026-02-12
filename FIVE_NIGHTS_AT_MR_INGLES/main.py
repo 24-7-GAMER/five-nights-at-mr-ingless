@@ -1768,8 +1768,8 @@ class Game:
             
             self._overlay_surfaces[cache_key] = glow_surf
         
-        # Apply with dynamic intensity
-        glow_surf = self._overlay_surfaces[cache_key].copy()
+        # Apply with dynamic intensity (no copy needed - set and restore alpha)
+        glow_surf = self._overlay_surfaces[cache_key]
         glow_surf.set_alpha(int(255 * intensity))
         self.screen.blit(glow_surf, (0, 0))
 

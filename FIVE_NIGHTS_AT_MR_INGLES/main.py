@@ -2755,11 +2755,16 @@ class Game:
     # =====================================================
 
     def draw_background(self):
-        """Draw office background"""
+        """Draw office background (optimized with caching)"""
         office_img = self.assets.get_image("office")
         if office_img:
-            scaled = pygame.transform.scale(office_img, (self.game_state.width, self.game_state.height))
-            self.screen.blit(scaled, (0, 0))
+            # Cache scaled background image
+            cache_key = f"office_bg_{self.game_state.width}_{self.game_state.height}"
+            if cache_key not in self._overlay_surfaces:
+                scaled = pygame.transform.scale(office_img, (self.game_state.width, self.game_state.height))
+                self._overlay_surfaces[cache_key] = scaled
+            
+            self.screen.blit(self._overlay_surfaces[cache_key], (0, 0))
         else:
             self.screen.fill((12, 12, 12))
 
@@ -2794,14 +2799,20 @@ class Game:
             pygame.draw.circle(self.screen, (255, 0, 0), (int(anim.x), int(anim.y)), 25)
 
     def draw_office_overlays(self):
-        """Draw door and light overlays"""
+        """Draw door and light overlays (optimized with caching)"""
         # Left door
         if (self.office.door_left_closed or self.office.door_left_progress > 0.01):
             door_img = self.assets.get_image("door_left")
             if door_img:
-                scale = self.game_state.height / door_img.get_height()
-                scaled = pygame.transform.scale(door_img, 
-                    (int(door_img.get_width() * scale), int(door_img.get_height() * scale)))
+                # Cache scaled door image
+                cache_key = f"door_left_{self.game_state.height}"
+                if cache_key not in self._overlay_surfaces:
+                    scale = self.game_state.height / door_img.get_height()
+                    scaled = pygame.transform.scale(door_img, 
+                        (int(door_img.get_width() * scale), int(door_img.get_height() * scale)))
+                    self._overlay_surfaces[cache_key] = scaled
+                
+                scaled = self._overlay_surfaces[cache_key]
                 # When progress=0 (open): x=-width, when progress=1 (closed): x=0
                 x = -scaled.get_width() + scaled.get_width() * self.office.door_left_progress
                 self.screen.blit(scaled, (int(x), 0))
@@ -2810,9 +2821,15 @@ class Game:
         if (self.office.door_right_closed or self.office.door_right_progress > 0.01):
             door_img = self.assets.get_image("door_right")
             if door_img:
-                scale = self.game_state.height / door_img.get_height()
-                scaled = pygame.transform.scale(door_img,
-                    (int(door_img.get_width() * scale), int(door_img.get_height() * scale)))
+                # Cache scaled door image
+                cache_key = f"door_right_{self.game_state.height}"
+                if cache_key not in self._overlay_surfaces:
+                    scale = self.game_state.height / door_img.get_height()
+                    scaled = pygame.transform.scale(door_img,
+                        (int(door_img.get_width() * scale), int(door_img.get_height() * scale)))
+                    self._overlay_surfaces[cache_key] = scaled
+                
+                scaled = self._overlay_surfaces[cache_key]
                 slide = 1 - self.office.door_right_progress
                 x = self.game_state.width - scaled.get_width() + scaled.get_width() * slide
                 self.screen.blit(scaled, (int(x), 0))
@@ -2873,15 +2890,19 @@ class Game:
         self.draw_office_overlays()
 
     def draw_camera_feed(self):
-        """Draw camera feed"""
+        """Draw camera feed (optimized with caching)"""
         cam_name = self.cameras.current_camera()
         cam_key = f"cam_{cam_name.lower().replace(' ', '_')}"
         cam_img = self.assets.get_image(cam_key)
 
-        # Camera background
+        # Camera background (cached)
         if cam_img:
-            scaled = pygame.transform.scale(cam_img, (self.game_state.width, self.game_state.height))
-            self.screen.blit(scaled, (0, 0))
+            cache_key = f"cam_scaled_{cam_key}_{self.game_state.width}_{self.game_state.height}"
+            if cache_key not in self._overlay_surfaces:
+                scaled = pygame.transform.scale(cam_img, (self.game_state.width, self.game_state.height))
+                self._overlay_surfaces[cache_key] = scaled
+            
+            self.screen.blit(self._overlay_surfaces[cache_key], (0, 0))
         else:
             self.screen.fill((0, 0, 25))
 
@@ -3267,15 +3288,20 @@ class Game:
             self.screen.blit(text, rect)
 
     def draw_menu(self):
-        """Draw main menu"""
+        """Draw main menu (optimized with caching)"""
         # Clear screen first to prevent black screen issues
         self.screen.fill((0, 0, 0))
         
         # Draw background image if available, otherwise use gradient
         bg_img = self.assets.get_image("menu_background")
         if bg_img:
-            scaled_bg = pygame.transform.scale(bg_img, (self.game_state.width, self.game_state.height))
-            self.screen.blit(scaled_bg, (0, 0))
+            # Cache scaled menu background
+            cache_key = f"menu_bg_{self.game_state.width}_{self.game_state.height}"
+            if cache_key not in self._overlay_surfaces:
+                scaled_bg = pygame.transform.scale(bg_img, (self.game_state.width, self.game_state.height))
+                self._overlay_surfaces[cache_key] = scaled_bg
+            
+            self.screen.blit(self._overlay_surfaces[cache_key], (0, 0))
         else:
             # Fallback to gradient if no background image
             time_offset = time.time() * 0.5

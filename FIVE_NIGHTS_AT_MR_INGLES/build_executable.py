@@ -48,7 +48,7 @@ def main():
         script_dir = os.path.dirname(os.path.abspath(__file__))
         os.chdir(script_dir)
 
-        desired_name = "Five Nights At Mr Ingles's"
+        # Use safe name without apostrophe to avoid Windows permission issues
         safe_name = "Five Nights At Mr Ingles"
         data_sep = ";" if os.name == "nt" else ":"
         
@@ -114,7 +114,7 @@ def main():
                     print(f"\n- Warning removing {folder}/: {e}")
         
         # Remove old spec files
-        for spec_file in (f"{safe_name}.spec", f"{desired_name}.spec", "main.spec"):
+        for spec_file in (f"{safe_name}.spec", "main.spec"):
             if os.path.exists(spec_file):
                 os.remove(spec_file)
         update_progress(0.40, "Cleanup complete")
@@ -212,13 +212,8 @@ def main():
         # Handle both Windows (.exe) and Linux/Mac (no extension) executables
         exe_ext = ".exe" if os.name == "nt" else ""
         exe_path = os.path.join("dist", f"{safe_name}{exe_ext}")
-        desired_exe_path = os.path.join("dist", f"{desired_name}{exe_ext}")
         
         if os.path.exists(exe_path):
-            if os.path.exists(desired_exe_path):
-                os.remove(desired_exe_path)
-            os.rename(exe_path, desired_exe_path)
-            exe_path = desired_exe_path
             size_mb = os.path.getsize(exe_path) / (1024 * 1024)
             update_progress(1.0, "Done")
             print("\nBuild successful")

@@ -1846,18 +1846,24 @@ class Game:
         mouse_x, mouse_y = pygame.mouse.get_pos()
         
         # Scale mouse position from window coordinates to game coordinates
-        mouse_x = mouse_x * (self.game_state.width / self.window_width)
-        mouse_y = mouse_y * (self.game_state.height / self.window_height)
+        # Validate window dimensions to prevent division by zero
+        if self.window_width > 0 and self.window_height > 0:
+            mouse_x = mouse_x * (self.game_state.width / self.window_width)
+            mouse_y = mouse_y * (self.game_state.height / self.window_height)
+        else:
+            return  # Skip panning if window dimensions are invalid
         
         # Calculate target camera offset based on mouse position
         # Maximum offset is the difference between zoomed and normal size
-        max_offset_x = int(self.game_state.width * (self.office_zoom_factor - 1))
-        max_offset_y = int(self.game_state.height * (self.office_zoom_factor - 1))
+        zoom_delta = self.office_zoom_factor - 1
+        max_offset_x = int(self.game_state.width * zoom_delta)
+        max_offset_y = int(self.game_state.height * zoom_delta)
         
         target_offset_x = 0
         target_offset_y = 0
         
         # Horizontal panning
+        center_x = self.game_state.width / 2
         if mouse_x < self.office_pan_edge_threshold:
             # Near left edge - pan right (show left side of image)
             target_offset_x = 0  # Maximum right pan
@@ -1866,10 +1872,10 @@ class Game:
             target_offset_x = -max_offset_x  # Maximum left pan
         else:
             # In center area - interpolate
-            denominator = self.game_state.width / 2 - self.office_pan_edge_threshold
+            denominator = center_x - self.office_pan_edge_threshold
             # Use small epsilon for division check to prevent discontinuity
             if abs(denominator) > 0.01:
-                center_distance = (mouse_x - self.game_state.width / 2) / denominator
+                center_distance = (mouse_x - center_x) / denominator
                 # Clamp center_distance to [-1, 1] to prevent extreme values
                 center_distance = max(-1.0, min(1.0, center_distance))
                 target_offset_x = -int(center_distance * max_offset_x)
@@ -1877,6 +1883,7 @@ class Game:
                 target_offset_x = 0
         
         # Vertical panning (subtle, FNAF doesn't pan much vertically)
+        center_y = self.game_state.height / 2
         if mouse_y < self.office_pan_edge_threshold:
             # Near top edge - pan down (show top of image)
             target_offset_y = 0  # Maximum down pan
@@ -1885,10 +1892,10 @@ class Game:
             target_offset_y = -max_offset_y  # Maximum up pan
         else:
             # In center area - interpolate
-            denominator = self.game_state.height / 2 - self.office_pan_edge_threshold
+            denominator = center_y - self.office_pan_edge_threshold
             # Use small epsilon for division check to prevent discontinuity
             if abs(denominator) > 0.01:
-                center_distance = (mouse_y - self.game_state.height / 2) / denominator
+                center_distance = (mouse_y - center_y) / denominator
                 # Clamp center_distance to [-1, 1] to prevent extreme values
                 center_distance = max(-1.0, min(1.0, center_distance))
                 target_offset_y = -int(center_distance * max_offset_y)
@@ -1896,7 +1903,9 @@ class Game:
                 target_offset_y = 0
         
         # Smoothly interpolate to target position (frame-rate independent lerp)
-        # Calculate lerp factor that works consistently across different frame rates
+        # Uses exponential decay: new_value = target + (old_value - target) * decay^dt
+        # The formula (1 - pow(1 - speed, dt * 60)) converts the per-frame speed (at 60fps)
+        # into a time-based speed that works consistently across different frame rates
         # Clamp to 1.0 to prevent overshoot in case of large dt values
         lerp_factor = min(1.0, 1 - pow(1 - self.office_pan_speed, dt * 60))
         self.office_camera_offset_x += (target_offset_x - self.office_camera_offset_x) * lerp_factor

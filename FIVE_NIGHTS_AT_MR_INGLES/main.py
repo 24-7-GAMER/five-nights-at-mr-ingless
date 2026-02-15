@@ -72,15 +72,18 @@ WINDOW_TITLE = "Five Nights at Mr Ingles's"
 FPS = 60
 SAVE_FILE = os.path.join(BASE_DIR, "mr_ingles_save.json")
 
-# Performance optimization constants
-MAX_PARTICLE_CACHE_SIZE = 50  # Max cached particle/glow surfaces
-MAX_OVERLAY_CACHE_SIZE = 100  # Max cached overlay surfaces
-MIN_CHROMATIC_ABERRATION = 0.3  # Skip chromatic aberration below this
-SCREEN_GLOW_CIRCLE_INTERVAL = 40  # Pixels between glow circles
-VHS_GLITCH_FREQUENCY = 0.05  # Random VHS glitch probability
-SCANLINE_SPACING = 8  # Pixels between camera scanlines
-STATIC_PARTICLE_COUNT_MULTIPLIER = 50  # Static particles = this * intensity
-CAMERA_NOISE_PARTICLE_COUNT = 15  # Noise particles in camera flash
+# Performance optimization constants - OPTIMIZED FOR 60 FPS
+MAX_PARTICLE_CACHE_SIZE = 100  # Max cached particle/glow surfaces
+MAX_OVERLAY_CACHE_SIZE = 200  # Max cached overlay surfaces
+MIN_CHROMATIC_ABERRATION = 0.5  # Skip chromatic aberration below this (higher = more skipping)
+SCREEN_GLOW_CIRCLE_INTERVAL = 60  # Pixels between glow circles (higher = less circles = faster)
+VHS_GLITCH_FREQUENCY = 0.02  # Random VHS glitch probability (lower = less frequent = faster)
+SCANLINE_SPACING = 12  # Pixels between camera scanlines (higher = fewer lines = faster)
+STATIC_PARTICLE_COUNT_MULTIPLIER = 20  # Static particles = this * intensity (lower = fewer particles = faster)
+CAMERA_NOISE_PARTICLE_COUNT = 8  # Noise particles in camera flash (lower = faster)
+MAX_PARTICLES = 100  # Maximum particles allowed (prevents particle spam)
+PARTICLE_UPDATE_SKIP = 1  # Update every N particles (1 = all, 2 = every other)
+EFFECTS_QUALITY = 0.6  # Global effects multiplier (0.5 = half intensity, faster)
 
 # =====================================================
 # GAME STATE
@@ -196,14 +199,6 @@ class CameraSystem:
         ]
         self.current_index = 0
 
-    def update_cameras_from_graph(self):
-        """Update camera list based on current room graph"""
-        # Get all rooms except Office (you can't see your own office on camera)
-        self.cameras = [room for room in ROOM_GRAPH.keys() if room != "Office"]
-        # Reset camera index if it's out of bounds
-        if self.current_index >= len(self.cameras):
-            self.current_index = 0
-
     def switch(self, index):
         if 0 <= index < len(self.cameras):
             self.current_index = index
@@ -232,239 +227,41 @@ class Jumpscare:
 # ROOM GRAPH AND NAVIGATION
 # =====================================================
 
-# Pool of room names for procedural generation
-ROOM_NAME_POOL = [
-    "Office", "West Hall", "East Hall", "Cafeteria", "Dining Area", "Stage", 
-    "Backstage", "Kitchen", "Gym", "Library", "Bathrooms", "Restrooms", "Vent",
-    "Supply Closet", "Storage", "Hallway A", "Hallway B", "Hallway C",
-    "Classroom 1", "Classroom 2", "Science Lab", "Computer Lab", "Art Room",
-    "Main Hall", "Server Room", "Janitor Closet", "Locker Room", "Auditorium",
-    "Break Room", "Security Room", "Utility Room", "Maintenance", "Workshop"
-]
+# Static room graph showing connections between rooms
+ROOM_GRAPH = {
+    "Office": ["West Hall", "East Hall"],
+    "West Hall": ["Office", "Cafeteria", "Dining Area", "Supply Closet"],
+    "East Hall": ["Office", "Gym", "Backstage", "Restrooms"],
+    "Stage": ["Dining Area", "Backstage"],
+    "Dining Area": ["Stage", "West Hall", "Kitchen"],
+    "Backstage": ["Stage", "East Hall", "Kitchen"],
+    "Kitchen": ["Dining Area", "Backstage", "Cafeteria"],
+    "Cafeteria": ["West Hall", "Kitchen", "Library"],
+    "Gym": ["East Hall", "Bathrooms"],
+    "Library": ["Cafeteria", "Bathrooms"],
+    "Bathrooms": ["Gym", "Library", "Vent"],
+    "Vent": ["Bathrooms", "Supply Closet", "Restrooms"],
+    "Supply Closet": ["West Hall", "Vent"],
+    "Restrooms": ["East Hall", "Vent"]
+}
 
-# Dynamic room graph (generated each night)
-ROOM_GRAPH = {}
-
-# Dynamic room positions (updated by generate_map)
-ROOM_POSITIONS = {}
-
-
-def generate_map(seed=None):
-    """Generate a procedurally created room graph with random structure and positions.
-    
-    Creates a unique map for each playthrough with:
-    - Variable number of rooms (12-18)
-    - Procedurally generated connections
-    - Random office position (not always bottom center)
-    - Guaranteed connectivity via BFS validation
-    - Variable office connections (at least 2, up to 5 adjacent rooms)
-    
-    Args:
-        seed: Random seed for generation
-    
-    Returns:
-        The generated ROOM_GRAPH dictionary
-    """
-    global ROOM_GRAPH, ROOM_POSITIONS
-    
-    if seed is not None:
-        rng = random.Random(seed)
-    else:
-        rng = random.Random()
-    
-    # Determine number of rooms for this map
-    num_rooms = rng.randint(12, 18)
-    
-    # Always include Office, then select random rooms from pool
-    selected_rooms = ["Office"]
-    available_names = [name for name in ROOM_NAME_POOL if name != "Office"]
-    selected_rooms.extend(rng.sample(available_names, num_rooms - 1))
-    
-    # Generate graph structure
-    ROOM_GRAPH = generate_connected_graph(selected_rooms, rng)
-    
-    # Generate room positions for minimap
-    generate_room_positions(selected_rooms, ROOM_GRAPH, rng)
-    
-    return ROOM_GRAPH
-
-
-def generate_connected_graph(rooms, rng):
-    """Generate a connected graph structure ensuring all rooms are reachable.
-    
-    Uses a modified Prim's algorithm to build a spanning tree, then adds
-    extra edges for interesting pathways.
-    
-    Args:
-        rooms: List of room names
-        rng: Random number generator
-    
-    Returns:
-        Dictionary mapping room names to lists of connected rooms
-    """
-    graph = {room: [] for room in rooms}
-    
-    # Start with Office as root
-    in_tree = {"Office"}
-    not_in_tree = set(rooms) - in_tree
-    
-    # Build minimum spanning tree
-    while not_in_tree:
-        # Pick random room from tree and random room not in tree
-        from_room = rng.choice(list(in_tree))
-        to_room = rng.choice(list(not_in_tree))
-        
-        # Add bidirectional connection
-        graph[from_room].append(to_room)
-        graph[to_room].append(from_room)
-        
-        # Move to_room into tree
-        in_tree.add(to_room)
-        not_in_tree.remove(to_room)
-    
-    # Add extra connections for complexity (25-40% more edges)
-    min_extra = len(rooms) // 4
-    max_extra = (len(rooms) * 2) // 5
-    # Ensure min is not greater than max (handle edge cases)
-    num_extra_edges = rng.randint(min(min_extra, max_extra), max(min_extra, max_extra))
-    
-    for _ in range(num_extra_edges):
-        room1 = rng.choice(rooms)
-        room2 = rng.choice(rooms)
-        
-        # Don't connect a room to itself or create duplicate connections
-        if room1 != room2 and room2 not in graph[room1]:
-            # Limit connections per room to avoid overly dense graphs
-            if len(graph[room1]) < 5 and len(graph[room2]) < 5:
-                graph[room1].append(room2)
-                graph[room2].append(room1)
-    
-    # Ensure Office has at least 2 connections for gameplay
-    while len(graph["Office"]) < 2:
-        candidate = rng.choice([r for r in rooms if r != "Office"])
-        if candidate not in graph["Office"] and len(graph[candidate]) < 5:
-            graph["Office"].append(candidate)
-            graph[candidate].append("Office")
-    
-    return graph
-
-
-def is_graph_connected(graph, rooms):
-    """Check if all rooms are reachable from Office using BFS."""
-    if not rooms or "Office" not in rooms:
-        return False
-    
-    visited = set()
-    queue = ["Office"]
-    
-    while queue:
-        room = queue.pop(0)
-        if room in visited:
-            continue
-        visited.add(room)
-        
-        for neighbor in graph.get(room, []):
-            if neighbor not in visited:
-                queue.append(neighbor)
-    
-    return len(visited) == len(rooms)
-
-
-def generate_room_positions(rooms, graph, rng):
-    """Generate 2D positions for rooms using force-directed layout algorithm.
-    
-    Creates neat, well-spaced room layouts with minimal line crossings.
-    Office position is randomized and can be anywhere on the map.
-    """
-    global ROOM_POSITIONS
-    
-    # Initialize positions randomly with more variety
-    positions = {}
-    for room in rooms:
-        if room == "Office":
-            # Office can be anywhere on the map (but favor central areas)
-            positions[room] = [rng.uniform(0.25, 0.75), rng.uniform(0.5, 0.8)]
-        else:
-            # Other rooms spread across the map
-            positions[room] = [rng.uniform(0.1, 0.9), rng.uniform(0.1, 0.75)]
-    
-    # Get office neighbors for special positioning
-    office_neighbors = graph.get("Office", [])
-    
-    # Position office neighbors in a circle around office initially
-    # Guard against empty neighbor list
-    if office_neighbors:
-        for i, neighbor in enumerate(office_neighbors):
-            angle = (i / len(office_neighbors)) * 2 * math.pi
-            offset_x = math.cos(angle) * 0.15
-            offset_y = math.sin(angle) * 0.15
-            positions[neighbor] = [
-                min(0.9, max(0.1, positions["Office"][0] + offset_x)),
-                min(0.75, max(0.1, positions["Office"][1] + offset_y))
-            ]
-    
-    # Force-directed layout iterations for neat positioning
-    for iteration in range(250):
-        forces = {room: [0, 0] for room in rooms}
-        
-        # Repulsion between all nodes (prevents overlap)
-        for i, room1 in enumerate(rooms):
-            for room2 in rooms[i+1:]:
-                dx = positions[room2][0] - positions[room1][0]
-                dy = positions[room2][1] - positions[room1][1]
-                dist = max(0.01, math.sqrt(dx*dx + dy*dy))
-                
-                # Strong repulsive force for close nodes (neat separation)
-                force = 0.03 / (dist * dist)
-                fx = (dx / dist) * force
-                fy = (dy / dist) * force
-                
-                forces[room1][0] -= fx
-                forces[room1][1] -= fy
-                forces[room2][0] += fx
-                forces[room2][1] += fy
-        
-        # Attraction between connected nodes (keeps connections short)
-        for room1, neighbors in graph.items():
-            for room2 in neighbors:
-                if room2 in positions:
-                    dx = positions[room2][0] - positions[room1][0]
-                    dy = positions[room2][1] - positions[room1][1]
-                    dist = max(0.01, math.sqrt(dx*dx + dy*dy))
-                    
-                    # Spring force pulls connected nodes together
-                    force = dist * 0.08
-                    fx = (dx / dist) * force
-                    fy = (dy / dist) * force
-                    
-                    forces[room1][0] += fx
-                    forces[room1][1] += fy
-        
-        # Very gentle gravity toward center (prevents extreme spreading)
-        # Only apply this weakly so office can still be off-center
-        for room in rooms:
-            if room != "Office":  # Don't pull office to center
-                center_pull = 0.003
-                forces[room][0] += (0.5 - positions[room][0]) * center_pull
-                forces[room][1] += (0.4 - positions[room][1]) * center_pull
-        
-        # Apply forces with damping
-        damping = 0.6
-        for room in rooms:
-            if room == "Office":
-                # Office stays completely fixed at its initial random position
-                # Don't apply any forces to it
-                pass
-            else:
-                # Other rooms move freely
-                positions[room][0] += forces[room][0] * damping
-                positions[room][1] += forces[room][1] * damping
-            
-            # Keep within bounds
-            positions[room][0] = max(0.05, min(0.95, positions[room][0]))
-            positions[room][1] = max(0.05, min(0.85, positions[room][1]))
-    
-    ROOM_POSITIONS = positions
+# Static room positions for minimap (x, y as percentages)
+ROOM_POSITIONS = {
+    "Office": [0.5, 0.8],
+    "West Hall": [0.3, 0.65],
+    "East Hall": [0.7, 0.65],
+    "Stage": [0.5, 0.15],
+    "Dining Area": [0.35, 0.3],
+    "Backstage": [0.65, 0.3],
+    "Kitchen": [0.5, 0.4],
+    "Cafeteria": [0.2, 0.45],
+    "Gym": [0.8, 0.5],
+    "Library": [0.15, 0.6],
+    "Bathrooms": [0.85, 0.65],
+    "Vent": [0.75, 0.75],
+    "Supply Closet": [0.25, 0.75],
+    "Restrooms": [0.75, 0.55]
+}
 
 
 def room_position(room, width, height):
@@ -1089,6 +886,12 @@ class Game:
         self.flicker_phase = 0.0
         self.run_seed = int(time.time() * 1000) % 1000000
         self.rng = random.Random(self.run_seed)
+        
+        # FPS optimization tracking
+        self.fps_samples = [60] * 10  # Track last 10 fps readings
+        self.current_fps = 60
+        self.quality_scale = 1.0  # Dynamic quality (1.0 = full, 0.5 = half)
+        self.frame_count = 0
         self.side_entry_cooldown = {"left": 0.0, "right": 0.0, "vent": 0.0}
         self.entry_cooldown_seconds = 6.0
         self.max_office_attackers = 2
@@ -1346,7 +1149,14 @@ class Game:
         self.game_state.state = "anti_cheat"
     
     def apply_creepy_static(self, intensity=0.3):
-        """Apply creepy static/noise overlay (optimized)"""
+        """Apply creepy static/noise overlay (optimized with quality scaling)"""
+        # Skip if quality is very low
+        if self.quality_scale < 0.4:
+            return
+        
+        # Scale intensity by quality
+        intensity = intensity * self.quality_scale
+        
         # Cache static surface
         cache_key = f"static_{self.game_state.width}_{self.game_state.height}"
         if cache_key not in self._overlay_surfaces:
@@ -1356,8 +1166,8 @@ class Game:
         static_surface.fill((0, 0, 0))  # Clear surface
         static_surface.set_alpha(int(255 * intensity * 0.4))
         
-        # Reduced count for better performance
-        count = max(1, int(STATIC_PARTICLE_COUNT_MULTIPLIER * intensity))
+        # Reduced count for better performance (scaled by quality)
+        count = max(1, int(STATIC_PARTICLE_COUNT_MULTIPLIER * intensity * self.quality_scale))
         for i in range(count):
             t = self.noise_phase + i * 0.17
             x = int((math.sin(t * 1.7) * 0.5 + 0.5) * self.game_state.width)
@@ -1591,14 +1401,6 @@ class Game:
         self.game_state.night = self.clamp(night, 1, 5)
         self.set_status("")
         
-        # Generate new map for this night
-        # Map is randomized on each playthrough using current time to ensure variety
-        map_seed = int(time.time() * 1000) + night * 1000
-        generate_map(map_seed)
-        
-        # Update camera system with new rooms
-        self.cameras.update_cameras_from_graph()
-        
         self.power.reset()
         self.office.reset()
         self.reset_animatronics()
@@ -1793,7 +1595,10 @@ class Game:
         self.color_overlay_timer = duration
     
     def add_particle(self, x, y, vx, vy, color, size, life):
-        """Add a single particle with specified properties"""
+        """Add a single particle with specified properties (with limit)"""
+        # Skip if too many particles (performance optimization)
+        if len(self.particles) >= MAX_PARTICLES:
+            return
         self.particles.append({
             'x': x,
             'y': y,
@@ -1805,7 +1610,10 @@ class Game:
         })
     
     def add_particle_burst(self, x, y, count, color, speed_range=(1, 3)):
-        """Create a burst of particles at position"""
+        """Create a burst of particles at position (with limit)"""
+        # Reduce count based on quality setting
+        count = int(count * self.quality_scale * EFFECTS_QUALITY)
+        count = min(count, MAX_PARTICLES - len(self.particles))  # Don't exceed limit
         for _ in range(count):
             angle = self.rng.uniform(0, math.pi * 2)
             speed = self.rng.uniform(*speed_range)
@@ -1820,7 +1628,7 @@ class Game:
             })
     
     def update_screen_effects(self, dt):
-        """Update all screen effects"""
+        """Update all screen effects (optimized)"""
         # Update screen shake
         if self.screen_shake_duration > 0:
             self.screen_shake_duration -= dt
@@ -1833,24 +1641,31 @@ class Game:
             if self.color_overlay_timer <= 0:
                 self.color_overlay = None
         
-        # Update particles
-        for particle in self.particles[:]:
-            particle['x'] += particle['vx']
-            particle['y'] += particle['vy']
-            particle['vy'] += 0.2  # Gravity
+        # Update particles (optimized - batch processing)
+        particles_to_remove = []
+        for i, particle in enumerate(self.particles):
+            # Skip some particle updates for performance
+            if i % PARTICLE_UPDATE_SKIP == 0 or particle['life'] < 0.2:
+                particle['x'] += particle['vx'] * self.quality_scale
+                particle['y'] += particle['vy'] * self.quality_scale
+                particle['vy'] += 0.2  # Gravity
             particle['life'] -= dt
             if particle['life'] <= 0:
-                self.particles.remove(particle)
+                particles_to_remove.append(particle)
+        
+        # Remove dead particles in batch
+        for particle in particles_to_remove:
+            self.particles.remove(particle)
         
         # Update visual effects based on game state
         self.game_state.scan_line_offset = (self.game_state.scan_line_offset + dt * 30) % self.game_state.height
         
-        # Chromatic aberration increases when stressed
+        # Chromatic aberration increases when stressed (scaled by quality)
         stress_level = 0.0
         if self.power.current < 30:
-            stress_level += 0.3
+            stress_level += 0.3 * self.quality_scale
         if self.power.outage:
-            stress_level += 0.5
+            stress_level += 0.5 * self.quality_scale
         # Check if any animatronics are adjacent to office
         office_neighbors_set = set(get_neighbors("Office"))
         if any(a.room in office_neighbors_set for a in self.animatronics):
@@ -1861,8 +1676,16 @@ class Game:
         self.game_state.glow_intensity = 0.2 + math.sin(time.time() * 0.5) * 0.1
     
     def draw_particles(self):
-        """Draw all active particles with enhanced visuals (optimized)"""
-        for particle in self.particles:
+        """Draw all active particles with enhanced visuals (optimized for FPS)"""
+        # Skip particle rendering if quality is very low
+        if self.quality_scale < 0.4:
+            return
+        
+        for i, particle in enumerate(self.particles):
+            # Skip some particles when quality is reduced
+            if i % 2 != 0 and self.quality_scale < 0.7:
+                continue
+            
             try:
                 alpha = int(255 * particle['life'])
                 # Ensure alpha is in valid range
@@ -1879,8 +1702,8 @@ class Game:
                 size = max(1, int(particle['size'] * particle['life']))
                 pos = (int(particle['x']), int(particle['y']))
                 
-                # Glow effect for particles (optimized with caching)
-                if particle.get('glow', True):
+                # Skip glow effect when quality is low (major performance save)
+                if particle.get('glow', True) and self.quality_scale > 0.6:
                     glow_size = size + 3
                     cache_key = (glow_size, color)
                     
@@ -1938,10 +1761,13 @@ class Game:
             self.screen.blit(overlay, (0, 0))
     
     def apply_chromatic_aberration(self, intensity=1.0):
-        """Apply RGB split effect for horror atmosphere (optimized)"""
-        if intensity <= MIN_CHROMATIC_ABERRATION:  # Skip effect if very low intensity to save performance
+        """Apply RGB split effect for horror atmosphere (optimized - skips when low quality)"""
+        # Skip if intensity too low or quality is reduced for FPS
+        if intensity <= MIN_CHROMATIC_ABERRATION or self.quality_scale < 0.7:
             return
         
+        # Scale intensity by quality
+        intensity = intensity * self.quality_scale
         offset = int(3 * intensity)
         if offset <= 0:
             return
@@ -1981,9 +1807,12 @@ class Game:
         self.screen.blit(red_surf, (0, 0), special_flags=pygame.BLEND_ADD)
         
     def apply_vhs_effect(self, intensity=1.0):
-        """Apply VHS tracking lines and distortion (optimized)"""
-        if intensity <= 0:
+        """Apply VHS tracking lines and distortion (optimized - skips when low quality)"""
+        if intensity <= 0 or self.quality_scale < 0.6:
             return
+        
+        # Scale intensity by quality
+        intensity = intensity * self.quality_scale
         
         # Cache VHS line surfaces to avoid recreating them each frame
         line_height = 2 + int(intensity)
@@ -1997,14 +1826,14 @@ class Game:
         line_surf = self._overlay_surfaces[cache_key]
         alpha = int(40 * intensity)
         
-        # VHS tracking lines (horizontal distortion lines)
-        for i in range(int(8 * intensity)):
+        # VHS tracking lines (horizontal distortion lines) - reduced count
+        for i in range(int(5 * intensity * self.quality_scale)):  # Reduced from 8
             y = int((self.game_state.scan_line_offset + i * 90) % self.game_state.height)
             line_surf.set_alpha(alpha)
             self.screen.blit(line_surf, (0, y))
         
         # Random horizontal glitch lines (reduced frequency for performance)
-        if self.rng.random() < VHS_GLITCH_FREQUENCY * intensity:
+        if self.rng.random() < VHS_GLITCH_FREQUENCY * intensity * self.quality_scale:
             glitch_y = self.rng.randint(0, self.game_state.height - 10)
             glitch_width = self.rng.randint(100, 400)
             glitch_x = self.rng.randint(0, self.game_state.width - glitch_width)
@@ -2024,9 +1853,12 @@ class Game:
             self.screen.blit(glitch_surf, (glitch_x, glitch_y))
     
     def apply_screen_glow(self, intensity=1.0):
-        """Apply dynamic screen glow/bloom effect (optimized)"""
-        if intensity <= 0:
+        """Apply dynamic screen glow/bloom effect (optimized - skips when low quality)"""
+        if intensity <= 0 or self.quality_scale < 0.5:
             return
+        
+        # Scale intensity by quality
+        intensity = intensity * self.quality_scale
         
         # Use cached glow surface if available
         cache_key = f"screen_glow_{self.game_state.width}_{self.game_state.height}"
@@ -2347,13 +2179,17 @@ class Game:
                 break
 
     def update_animatronics(self, dt):
-        """Update all animatronics with advanced AI coordination"""
-        # First pass: update each animatronic
-        for anim in self.animatronics:
+        """Update all animatronics with advanced AI coordination (optimized)"""
+        # First pass: update each animatronic (skip some updates when quality is low for FPS)
+        for i, anim in enumerate(self.animatronics):
+            # When quality is low, update only half the animatronics each frame (alternating)
+            if self.quality_scale < 0.6 and i % 2 != self.frame_count % 2:
+                continue
             anim.update(dt, self.game_state, self.difficulty)
         
-        # Second pass: AI coordination and communication
-        self.coordinate_animatronics(dt)
+        # Second pass: AI coordination and communication (skip when quality is very low)
+        if self.quality_scale > 0.4:
+            self.coordinate_animatronics(dt)
         
         # Third pass: check for attacks and blocked behaviors
         for anim in self.animatronics:
@@ -3321,21 +3157,24 @@ class Game:
         cam_text = self.font_medium.render(f"CAM: {cam_name}", True, (0, 255, 255))
         self.screen.blit(cam_text, (20, 20))
 
-        # Enhanced animated scanlines with CRT effect (optimized - reduce scanline frequency)
-        scan_offset = int(time.time() * 50) % SCANLINE_SPACING
-        for y in range(scan_offset, self.game_state.height, SCANLINE_SPACING):
-            scanline_alpha = 15 + int(5 * math.sin(y * 0.1 + time.time() * 2))
-            
-            # Cache scanline surface
-            cache_key = f"scanline_{self.game_state.width}"
-            if cache_key not in self._overlay_surfaces:
-                scanline = pygame.Surface((self.game_state.width, 2))
-                scanline.fill((0, 180, 200))
-                self._overlay_surfaces[cache_key] = scanline
-            
-            scanline = self._overlay_surfaces[cache_key]
-            scanline.set_alpha(scanline_alpha)
-            self.screen.blit(scanline, (0, y))
+        # Enhanced animated scanlines with CRT effect (optimized - skip when quality is low)
+        if self.quality_scale > 0.5:
+            # Adjust scanline spacing based on quality
+            scanline_spacing = int(SCANLINE_SPACING / self.quality_scale)
+            scan_offset = int(time.time() * 50) % scanline_spacing
+            for y in range(scan_offset, self.game_state.height, scanline_spacing):
+                scanline_alpha = int((15 + int(5 * math.sin(y * 0.1 + time.time() * 2))) * self.quality_scale)
+                
+                # Cache scanline surface
+                cache_key = f"scanline_{self.game_state.width}"
+                if cache_key not in self._overlay_surfaces:
+                    scanline = pygame.Surface((self.game_state.width, 2))
+                    scanline.fill((0, 180, 200))
+                    self._overlay_surfaces[cache_key] = scanline
+                
+                scanline = self._overlay_surfaces[cache_key]
+                scanline.set_alpha(scanline_alpha)
+                self.screen.blit(scanline, (0, y))
         
         # CRT curvature effect (edge darkening) - cached
         cache_key = f"crt_{self.game_state.width}_{self.game_state.height}"
@@ -3519,6 +3358,19 @@ class Game:
             halluc_rect = halluc_text.get_rect(center=(self.game_state.width // 2, int(self.game_state.height * 0.92)))
             self.screen.blit(halluc_text, halluc_rect)
         
+        # FPS and Quality display (top-right corner, below time)
+        fps_color = (100, 255, 100) if self.current_fps >= 58 else (255, 255, 100) if self.current_fps >= 50 else (255, 100, 100)
+        fps_text = self.font_small.render(f"FPS: {int(self.current_fps)}", True, fps_color)
+        fps_rect = fps_text.get_rect(topright=(self.game_state.width - 30, 70))
+        self.screen.blit(fps_text, fps_rect)
+        
+        # Quality indicator (shows dynamic quality adjustment)
+        quality_pct = int(self.quality_scale * 100)
+        quality_color = (100, 255, 100) if quality_pct >= 90 else (255, 255, 100) if quality_pct >= 60 else (255, 150, 100)
+        quality_text = self.font_small.render(f"Quality: {quality_pct}%", True, quality_color)
+        quality_rect = quality_text.get_rect(topright=(self.game_state.width - 30, 90))
+        self.screen.blit(quality_text, quality_rect)
+        
         # NEW FEATURES HUD
         # Flashlight battery indicator
         battery = int(self.office.flashlight_battery)
@@ -3549,7 +3401,7 @@ class Game:
         # Safe spot indicator
         if self.current_safe_spot:
             safe_time = int(self.safe_spot_duration)
-            safe_text = self.font_medium.render(f"HIDING IN {self.current_safe_spot.upper()} - {safe_time}s", True, (100, 255, 100))
+            safe_text = self.font_medium.render(f"HIDING: {self.current_safe_spot.upper()} - {safe_time}s", True, (100, 255, 100))
             safe_rect = safe_text.get_rect(center=(self.game_state.width // 2, int(self.game_state.height * 0.50)))
             self.screen.blit(safe_text, safe_rect)
 
@@ -3578,7 +3430,7 @@ class Game:
                 "F: Flashlight",
                 "TAB: Cameras",
                 "1-6: Switch Cam",
-                "--- NEW ABILITIES ---",
+                "SPECIAL ABILITIES:",
                 "B: Barricade Door",
                 "N: Noise Maker",
                 "V: Ventilation",
@@ -4668,12 +4520,28 @@ class Game:
     # =====================================================
 
     def run(self):
-        """Main game loop - Optimized for 60 FPS"""
+        """Main game loop - Optimized for 60 FPS with dynamic quality adjustment"""
         while self.running:
             try:
                 dt = self.clock.tick(FPS if self.fps_cap_enabled else 0) / 1000.0
                 
-                # Skip heavy updates if running slow
+                # Track FPS and dynamically adjust quality
+                self.frame_count += 1
+                if self.frame_count % 10 == 0:  # Update FPS tracking every 10 frames
+                    self.current_fps = self.clock.get_fps()
+                    self.fps_samples.append(self.current_fps)
+                    self.fps_samples = self.fps_samples[-10:]  # Keep last 10 samples
+                    avg_fps = sum(self.fps_samples) / len(self.fps_samples)
+                    
+                    # Dynamic quality adjustment to maintain 60 FPS
+                    if avg_fps < 50:  # Below 50 FPS, reduce quality significantly
+                        self.quality_scale = max(0.3, self.quality_scale - 0.1)
+                    elif avg_fps < 55:  # Below 55 FPS, reduce quality slightly
+                        self.quality_scale = max(0.5, self.quality_scale - 0.05)
+                    elif avg_fps > 58:  # Above 58 FPS, increase quality
+                        self.quality_scale = min(1.0, self.quality_scale + 0.02)
+                
+                # Skip heavy updates if running slow (prevent death spiral)
                 if dt > 0.033:  # More than 30ms per frame
                     dt = 0.033  # Cap dt to prevent spiral of death
 

@@ -449,8 +449,8 @@ def generate_room_positions(rooms, graph, rng):
             # Middle area for any uncategorized rooms
             positions[room] = [rng.uniform(0.35, 0.65), rng.uniform(0.2, 0.7)]
     
-    # Force-directed layout iterations for better layout quality
-    for iteration in range(150):
+    # Force-directed layout iterations for better layout quality (more iterations for better results)
+    for iteration in range(200):
         forces = {room: [0, 0] for room in rooms}
         
         # Repulsion between all nodes (prevents overlap)
@@ -461,7 +461,7 @@ def generate_room_positions(rooms, graph, rng):
                 dist = max(0.01, math.sqrt(dx*dx + dy*dy))
                 
                 # Stronger repulsive force for closer nodes
-                force = 0.015 / (dist * dist)
+                force = 0.02 / (dist * dist)
                 fx = (dx / dist) * force
                 fy = (dy / dist) * force
                 
@@ -486,16 +486,16 @@ def generate_room_positions(rooms, graph, rng):
                     forces[room1][0] += fx
                     forces[room1][1] += fy
         
-        # Horizontal bias to keep left/right separation
+        # Horizontal bias to keep left/right separation (stronger bias)
         for room in rooms:
             if room in west_side_rooms:
-                # Push west rooms leftward
-                if positions[room][0] > 0.45:
-                    forces[room][0] -= 0.02
+                # Push west rooms leftward more strongly
+                if positions[room][0] > 0.42:
+                    forces[room][0] -= 0.03
             elif room in east_side_rooms:
-                # Push east rooms rightward
-                if positions[room][0] < 0.55:
-                    forces[room][0] += 0.02
+                # Push east rooms rightward more strongly
+                if positions[room][0] < 0.58:
+                    forces[room][0] += 0.03
         
         # Apply forces with damping
         for room in rooms:

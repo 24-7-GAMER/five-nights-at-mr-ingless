@@ -1879,6 +1879,8 @@ class Game:
             # Clamp center_distance to [-1, 1] to prevent extreme values
             center_distance = max(-1.0, min(1.0, center_distance))
             target_offset_x = -center_distance * max_offset_x
+            # Clamp target to valid range [-max_offset_x, 0]
+            target_offset_x = max(-max_offset_x, min(0.0, target_offset_x))
         
         # Vertical panning (subtle, FNAF doesn't pan much vertically)
         center_y = self.game_state.height / 2
@@ -1896,6 +1898,8 @@ class Game:
             # Clamp center_distance to [-1, 1] to prevent extreme values
             center_distance = max(-1.0, min(1.0, center_distance))
             target_offset_y = -center_distance * max_offset_y
+            # Clamp target to valid range [-max_offset_y, 0]
+            target_offset_y = max(-max_offset_y, min(0.0, target_offset_y))
         
         # Smoothly interpolate to target position (frame-rate independent lerp)
         # Uses exponential decay: new_value = target + (old_value - target) * decay^dt
@@ -1910,6 +1914,11 @@ class Game:
         
         self.office_camera_offset_x += (target_offset_x - self.office_camera_offset_x) * lerp_factor
         self.office_camera_offset_y += (target_offset_y - self.office_camera_offset_y) * lerp_factor
+        
+        # Clamp offsets to prevent panning outside the picture bounds
+        # Valid range: [-max_offset, 0] (0 shows left/top, -max_offset shows right/bottom)
+        self.office_camera_offset_x = max(-max_offset_x, min(0.0, self.office_camera_offset_x))
+        self.office_camera_offset_y = max(-max_offset_y, min(0.0, self.office_camera_offset_y))
 
     def update_fairness_caps(self):
         """Compute real-time caps to prevent impossible states"""

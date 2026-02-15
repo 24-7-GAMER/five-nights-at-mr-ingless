@@ -196,6 +196,14 @@ class CameraSystem:
         ]
         self.current_index = 0
 
+    def update_cameras_from_graph(self):
+        """Update camera list based on current room graph"""
+        # Get all rooms except Office (you can't see your own office on camera)
+        self.cameras = [room for room in ROOM_GRAPH.keys() if room != "Office"]
+        # Reset camera index if it's out of bounds
+        if self.current_index >= len(self.cameras):
+            self.current_index = 0
+
     def switch(self, index):
         if 0 <= index < len(self.cameras):
             self.current_index = index
@@ -224,6 +232,7 @@ class Jumpscare:
 # ROOM GRAPH AND NAVIGATION
 # =====================================================
 
+# Default room graph (will be replaced by procedural generation)
 ROOM_GRAPH = {
     "Office": ["West Hall", "East Hall"],
     "West Hall": ["Office", "Cafeteria", "Gym", "Supply Closet"],
@@ -241,19 +250,182 @@ ROOM_GRAPH = {
     "Restrooms": ["East Hall", "Vent"],
 }
 
+# Dynamic room positions (updated by generate_map)
+ROOM_POSITIONS = {}
+
+
+def generate_map(seed=None):
+    """Generate a random room graph with Office having exactly 2 openings (left and right)"""
+    global ROOM_GRAPH, ROOM_POSITIONS
+    
+    if seed is not None:
+        rng = random.Random(seed)
+    else:
+        rng = random.Random()
+    
+    # Pool of possible room names
+    room_name_pool = [
+        "Stage", "Dining Area", "Backstage", "Kitchen",
+        "Cafeteria", "Gym", "Library", "Bathrooms", 
+        "Vent", "Supply Closet", "Restrooms", "Classroom",
+        "Lab", "Workshop", "Storage", "Lounge", "Break Room",
+        "Auditorium", "Corridor", "Maintenance", "Server Room",
+        "Art Room", "Music Room", "Science Lab", "Computer Lab"
+    ]
+    
+    # Shuffle the pool
+    rng.shuffle(room_name_pool)
+    
+    # Number of rooms (10-15 for balance)
+    num_rooms = rng.randint(10, 15)
+    
+    # Always start with Office, West Hall, and East Hall
+    rooms = ["Office", "West Hall", "East Hall"]
+    
+    # Add random rooms from the pool
+    for i in range(num_rooms - 3):
+        if room_name_pool:
+            rooms.append(room_name_pool.pop())
+    
+    # Build the graph
+    graph = {room: [] for room in rooms}
+    
+    # Office always connects to West Hall (left) and East Hall (right)
+    graph["Office"] = ["West Hall", "East Hall"]
+    graph["West Hall"].append("Office")
+    graph["East Hall"].append("Office")
+    
+    # Connect West Hall to 2-4 random rooms (excluding Office and East Hall)
+    west_candidates = [r for r in rooms if r not in ["Office", "West Hall", "East Hall"]]
+    west_connections = rng.sample(west_candidates, min(rng.randint(2, 4), len(west_candidates)))
+    for room in west_connections:
+        if room not in graph["West Hall"]:
+            graph["West Hall"].append(room)
+        if "West Hall" not in graph[room]:
+            graph[room].append("West Hall")
+    
+    # Connect East Hall to 2-4 random rooms (excluding Office, West Hall, and west connections)
+    east_candidates = [r for r in rooms if r not in ["Office", "West Hall", "East Hall"] + west_connections[:2]]
+    east_connections = rng.sample(east_candidates, min(rng.randint(2, 4), len(east_candidates)))
+    for room in east_connections:
+        if room not in graph["East Hall"]:
+            graph["East Hall"].append(room)
+        if "East Hall" not in graph[room]:
+            graph[room].append("East Hall")
+    
+    # Connect remaining rooms to create a connected graph
+    all_connected = west_connections + east_connections
+    remaining = [r for r in rooms if r not in ["Office", "West Hall", "East Hall"] + all_connected]
+    
+    # Ensure all remaining rooms are connected
+    for room in remaining:
+        if not graph[room]:  # If room has no connections
+            # Connect to a random already-connected room
+            candidates = [r for r in all_connected if r != room]
+            if candidates:
+                target = rng.choice(candidates)
+                graph[room].append(target)
+                graph[target].append(room)
+                all_connected.append(room)
+    
+    # Add some random additional connections for variety (1-3 per room on average)
+    for room in rooms:
+        if room == "Office":
+            continue  # Office only has 2 connections
+        
+        # Randomly add 0-2 more connections
+        num_extra = rng.randint(0, 2)
+        for _ in range(num_extra):
+            candidates = [r for r in rooms if r != room and r not in graph[room]]
+            if candidates:
+                target = rng.choice(candidates)
+                graph[room].append(target)
+                graph[target].append(room)
+    
+    ROOM_GRAPH = graph
+    
+    # Generate positions for minimap using force-directed layout
+    generate_room_positions(rooms, graph, rng)
+    
+    return graph
+
+
+def generate_room_positions(rooms, graph, rng):
+    """Generate 2D positions for rooms using a simple force-directed algorithm"""
+    global ROOM_POSITIONS
+    
+    # Initialize positions randomly
+    positions = {}
+    for i, room in enumerate(rooms):
+        if room == "Office":
+            # Office at bottom center
+            positions[room] = [0.5, 0.85]
+        elif room == "West Hall":
+            # West Hall to the left of Office
+            positions[room] = [0.3, 0.85]
+        elif room == "East Hall":
+            # East Hall to the right of Office
+            positions[room] = [0.7, 0.85]
+        else:
+            # Random position for other rooms
+            positions[room] = [rng.uniform(0.1, 0.9), rng.uniform(0.1, 0.7)]
+    
+    # Force-directed layout iterations
+    for iteration in range(100):
+        forces = {room: [0, 0] for room in rooms}
+        
+        # Repulsion between all nodes
+        for i, room1 in enumerate(rooms):
+            for room2 in rooms[i+1:]:
+                dx = positions[room2][0] - positions[room1][0]
+                dy = positions[room2][1] - positions[room1][1]
+                dist = max(0.01, math.sqrt(dx*dx + dy*dy))
+                
+                # Repulsive force
+                force = 0.01 / (dist * dist)
+                fx = (dx / dist) * force
+                fy = (dy / dist) * force
+                
+                forces[room1][0] -= fx
+                forces[room1][1] -= fy
+                forces[room2][0] += fx
+                forces[room2][1] += fy
+        
+        # Attraction between connected nodes
+        for room1, neighbors in graph.items():
+            for room2 in neighbors:
+                if room2 in positions:
+                    dx = positions[room2][0] - positions[room1][0]
+                    dy = positions[room2][1] - positions[room1][1]
+                    dist = max(0.01, math.sqrt(dx*dx + dy*dy))
+                    
+                    # Attractive force (spring)
+                    force = dist * 0.05
+                    fx = (dx / dist) * force
+                    fy = (dy / dist) * force
+                    
+                    forces[room1][0] += fx
+                    forces[room1][1] += fy
+        
+        # Apply forces (but keep Office, West Hall, East Hall fixed)
+        for room in rooms:
+            if room not in ["Office", "West Hall", "East Hall"]:
+                positions[room][0] += forces[room][0] * 0.5
+                positions[room][1] += forces[room][1] * 0.5
+                
+                # Keep within bounds
+                positions[room][0] = max(0.05, min(0.95, positions[room][0]))
+                positions[room][1] = max(0.05, min(0.75, positions[room][1]))
+    
+    ROOM_POSITIONS = positions
+
 
 def room_position(room, width, height):
     """Get the visual position of a room"""
-    positions = {
-        "Office": (width * 0.5, height * 0.7),
-        "Hallway": (width * 0.5, height * 0.4),
-        "Cafeteria": (width * 0.3, height * 0.4),
-        "Gym": (width * 0.7, height * 0.4),
-        "Library": (width * 0.25, height * 0.3),
-        "Bathrooms": (width * 0.75, height * 0.3),
-        "Vent": (width * 0.5, height * 0.2),
-    }
-    return positions.get(room, (width * 0.5, height * 0.5))
+    if room in ROOM_POSITIONS:
+        return (width * ROOM_POSITIONS[room][0], height * ROOM_POSITIONS[room][1])
+    # Fallback to center if room not found
+    return (width * 0.5, height * 0.5)
 
 
 def get_neighbors(room):
@@ -1175,23 +1347,14 @@ class Game:
         map_title = self.font_small.render("CAMERA MAP", True, (100, 200, 255))
         self.screen.blit(map_title, (minimap_x + 10, minimap_y + 5))
         
-        # Scale and position for minimap rooms
-        room_positions = {
-            "Office": (minimap_x + 170, minimap_y + 200),
-            "West Hall": (minimap_x + 100, minimap_y + 200),
-            "East Hall": (minimap_x + 240, minimap_y + 200),
-            "Cafeteria": (minimap_x + 100, minimap_y + 150),
-            "Gym": (minimap_x + 50, minimap_y + 150),
-            "Library": (minimap_x + 240, minimap_y + 150),
-            "Bathrooms": (minimap_x + 290, minimap_y + 150),
-            "Stage": (minimap_x + 170, minimap_y + 35),
-            "Dining Area": (minimap_x + 170, minimap_y + 90),
-            "Backstage": (minimap_x + 240, minimap_y + 35),
-            "Kitchen": (minimap_x + 240, minimap_y + 90),
-            "Supply Closet": (minimap_x + 40, minimap_y + 200),
-            "Restrooms": (minimap_x + 300, minimap_y + 200),
-            "Vent": (minimap_x + 290, minimap_y + 120),
-        }
+        # Scale and position for minimap rooms using dynamic positions
+        room_positions = {}
+        for room, normalized_pos in ROOM_POSITIONS.items():
+            # Scale normalized positions (0-1) to minimap coordinates
+            # Leave padding on edges
+            x = minimap_x + 20 + int(normalized_pos[0] * (minimap_width - 40))
+            y = minimap_y + 30 + int(normalized_pos[1] * (minimap_height - 50))
+            room_positions[room] = (x, y)
         
         # Store positions for click detection
         self.minimap_room_positions = room_positions
@@ -1293,33 +1456,77 @@ class Game:
         """Reset animatronics to starting positions"""
         def jitter(base, spread):
             return base + self.rng.uniform(-spread, spread)
+        
+        # Get available rooms for animatronic starting positions
+        available_rooms = [room for room in ROOM_GRAPH.keys() 
+                          if room not in ["Office", "West Hall", "East Hall"]]
+        
+        # Ensure we have enough rooms
+        if len(available_rooms) < 4:
+            available_rooms = list(ROOM_GRAPH.keys())
+        
+        # Randomly select starting rooms for each animatronic
+        start_rooms = self.rng.sample(available_rooms, min(4, len(available_rooms)))
+        if len(start_rooms) < 4:
+            start_rooms.extend(self.rng.choices(available_rooms, k=4-len(start_rooms)))
+        
+        # Generate patrol routes for each animatronic
+        def generate_patrol_route(start_room, length=4):
+            """Generate a patrol route starting from a room"""
+            route = [start_room]
+            current = start_room
+            visited = set([start_room])
+            
+            for _ in range(length - 1):
+                neighbors = [n for n in get_neighbors(current) if n not in ["Office"]]
+                if not neighbors:
+                    break
+                
+                # Prefer unvisited rooms
+                unvisited = [n for n in neighbors if n not in visited]
+                if unvisited:
+                    next_room = self.rng.choice(unvisited)
+                else:
+                    next_room = self.rng.choice(neighbors)
+                
+                route.append(next_room)
+                visited.add(next_room)
+                current = next_room
+            
+            # Add hallways to make them approach the office
+            if "West Hall" not in route and self.rng.random() < 0.6:
+                route.append("West Hall")
+            if "East Hall" not in route and self.rng.random() < 0.6:
+                route.append("East Hall")
+            
+            return route
 
         self.animatronics = [
-            Animatronic("Scary Mr Ingles", "Supply Closet", jitter(0.52, 0.08), jitter(5.0, 0.5), "normal",
+            Animatronic("Scary Mr Ingles", start_rooms[0], jitter(0.52, 0.08), jitter(5.0, 0.5), "normal",
                         attack_side="right",
-                        patrol_route=["Supply Closet", "West Hall", "Gym", "Cafeteria", "Dining Area"],
+                        patrol_route=generate_patrol_route(start_rooms[0], 5),
                         start_delay_minutes=self.rng.randint(2, 5),
                         hallway_entry_delay=jitter(2.2, 0.4),
                         aggression_ramp=jitter(0.25, 0.06),
                         rng=self.rng),
-            Animatronic("Freaky Temi", "Bathrooms", jitter(0.34, 0.05), jitter(6.5, 0.7), "teleport",
+            Animatronic("Freaky Temi", start_rooms[1], jitter(0.34, 0.05), jitter(6.5, 0.7), "teleport",
                         attack_side="right",
-                        patrol_route=["Bathrooms", "Kitchen", "East Hall", "Backstage"],
+                        patrol_route=generate_patrol_route(start_rooms[1], 4),
                         start_delay_minutes=self.rng.randint(5, 10),
                         hallway_entry_delay=jitter(2.6, 0.4),
                         aggression_ramp=jitter(0.22, 0.06),
                         rng=self.rng,
                         size_multiplier=0.45),
-            Animatronic("Librarian", "Stage", jitter(0.32, 0.05), jitter(6.8, 0.6), "teleport",
+            Animatronic("Librarian", start_rooms[2], jitter(0.32, 0.05), jitter(6.8, 0.6), "teleport",
                         attack_side="left",
-                        patrol_route=["Stage", "Dining Area", "Cafeteria", "Library"],
+                        patrol_route=generate_patrol_route(start_rooms[2], 4),
                         start_delay_minutes=self.rng.randint(6, 11),
                         hallway_entry_delay=jitter(2.4, 0.4),
                         aggression_ramp=jitter(0.24, 0.06),
                         rng=self.rng),
-            Animatronic("Vent Crawler", "Vent", jitter(0.38, 0.05), jitter(5.8, 0.6), "vent",
+            Animatronic("Vent Crawler", start_rooms[3], jitter(0.38, 0.05), jitter(5.8, 0.6), "vent",
                         attack_side="vent",
-                        patrol_route=["Vent", "Bathrooms", "Restrooms", "East Hall"],
+                        patrol_route=generate_patrol_route(start_rooms[3], 4),
                         start_delay_minutes=self.rng.randint(15, 21),
                         hallway_entry_delay=jitter(2.0, 0.3),
                         aggression_ramp=jitter(0.28, 0.06),
@@ -1331,6 +1538,16 @@ class Game:
         self.assets.stop_music()
         self.game_state.night = self.clamp(night, 1, 5)
         self.set_status("")
+        
+        # Generate new map for this night
+        # Use night number as seed for reproducibility (each night will have the same map if replayed)
+        # But add the current time to make it different each time we start a night
+        map_seed = int(time.time() * 1000) + night * 1000
+        generate_map(map_seed)
+        
+        # Update camera system with new rooms
+        self.cameras.update_cameras_from_graph()
+        
         self.power.reset()
         self.office.reset()
         self.reset_animatronics()

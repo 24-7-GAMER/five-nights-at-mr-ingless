@@ -1860,11 +1860,9 @@ class Game:
         # Horizontal panning
         if mouse_x < self.office_pan_edge_threshold:
             # Near left edge - pan right (show left side of image)
-            pan_strength = 1 - (mouse_x / self.office_pan_edge_threshold)
             target_offset_x = 0  # Maximum right pan
         elif mouse_x > self.game_state.width - self.office_pan_edge_threshold:
             # Near right edge - pan left (show right side of image)
-            pan_strength = (mouse_x - (self.game_state.width - self.office_pan_edge_threshold)) / self.office_pan_edge_threshold
             target_offset_x = -max_offset_x  # Maximum left pan
         else:
             # In center area - interpolate
@@ -1874,11 +1872,9 @@ class Game:
         # Vertical panning (subtle, FNAF doesn't pan much vertically)
         if mouse_y < self.office_pan_edge_threshold:
             # Near top edge - pan down (show top of image)
-            pan_strength = 1 - (mouse_y / self.office_pan_edge_threshold)
             target_offset_y = 0  # Maximum down pan
         elif mouse_y > self.game_state.height - self.office_pan_edge_threshold:
             # Near bottom edge - pan up (show bottom of image)
-            pan_strength = (mouse_y - (self.game_state.height - self.office_pan_edge_threshold)) / self.office_pan_edge_threshold
             target_offset_y = -max_offset_y  # Maximum up pan
         else:
             # In center area - interpolate

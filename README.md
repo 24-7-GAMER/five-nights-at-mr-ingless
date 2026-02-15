@@ -74,8 +74,9 @@
 - ✅ **Limited door uses system** (3 uses per door)
 - ✅ **Door use restoration** (blocks restore uses when doors stop attacks)
 - ✅ 4 animatronics with AI pathfinding
-- ✅ 7-room environment with navigation graph
-- ✅ Office + 6 camera feed system
+- ✅ 28-room environment with fixed navigation graph
+- ✅ **Randomized room positions** for variety on each playthrough
+- ✅ Office + 27 camera feed system
 - ✅ Door controls (left/right)
 - ✅ Light toggle
 - ✅ Power outage events
@@ -176,7 +177,7 @@ class Game:
 | `GameState` | Main game state | Night, time, power, score tracking |
 | `PowerSystem` | Power drain mechanics | Usage tracking, outage events |
 | `Office` | Office controls & effects | Doors, lights, animations |
-| `CameraSystem` | Camera switching | 6 camera feeds + minimap |
+| `CameraSystem` | Camera switching | 27 camera feeds + minimap |
 | `Jumpscare` | Jumpscare events | Attack animations and effects |
 | `Animatronic` | Advanced AI behavior | Mood, learning, hunting, coordination |
 | `AssetManager` | Image/sound loading | Sprite and audio management |

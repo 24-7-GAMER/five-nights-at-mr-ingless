@@ -255,7 +255,7 @@ ROOM_POSITIONS = {}
 
 
 def generate_map(seed=None):
-    """Generate a random room graph with Office having exactly 2 openings (left and right)"""
+    """Generate randomized room positions using the fixed room graph layout"""
     global ROOM_GRAPH, ROOM_POSITIONS
     
     if seed is not None:
@@ -263,117 +263,56 @@ def generate_map(seed=None):
     else:
         rng = random.Random()
     
-    # Pool of possible room names
-    room_name_pool = [
-        "Stage", "Dining Area", "Backstage", "Kitchen",
-        "Cafeteria", "Gym", "Library", "Bathrooms", 
-        "Vent", "Supply Closet", "Restrooms", "Classroom",
-        "Lab", "Workshop", "Storage", "Lounge", "Break Room",
-        "Auditorium", "Corridor", "Maintenance", "Server Room",
-        "Art Room", "Music Room", "Science Lab", "Computer Lab"
-    ]
-    
-    # Shuffle the pool
-    rng.shuffle(room_name_pool)
-    
-    # Number of rooms (10-15 for balance)
-    num_rooms = rng.randint(10, 15)
-    
-    # Always start with Office, West Hall, and East Hall
-    rooms = ["Office", "West Hall", "East Hall"]
-    
-    # Add random rooms from the pool
-    for i in range(num_rooms - 3):
-        if room_name_pool:
-            rooms.append(room_name_pool.pop())
-    
-    # Build the graph
-    graph = {room: [] for room in rooms}
-    
-    # Office always connects to West Hall (left) and East Hall (right)
-    graph["Office"] = ["West Hall", "East Hall"]
-    graph["West Hall"].append("Office")
-    graph["East Hall"].append("Office")
-    
-    # Connect West Hall to 2-4 random rooms (excluding Office and East Hall)
-    west_candidates = [r for r in rooms if r not in ["Office", "West Hall", "East Hall"]]
-    west_connections = rng.sample(west_candidates, min(rng.randint(2, 4), len(west_candidates)))
-    for room in west_connections:
-        if room not in graph["West Hall"]:
-            graph["West Hall"].append(room)
-        if "West Hall" not in graph[room]:
-            graph[room].append("West Hall")
-    
-    # Connect East Hall to 2-4 random rooms (excluding Office, West Hall, and some west connections to ensure variety)
-    # We exclude first 2 west connections to prevent too much overlap between the two halls
-    east_candidates = [r for r in rooms if r not in ["Office", "West Hall", "East Hall"] + west_connections[:2]]
-    east_connections = rng.sample(east_candidates, min(rng.randint(2, 4), len(east_candidates)))
-    for room in east_connections:
-        if room not in graph["East Hall"]:
-            graph["East Hall"].append(room)
-        if "East Hall" not in graph[room]:
-            graph[room].append("East Hall")
-    
-    # Connect remaining rooms to create a connected graph
-    all_connected = west_connections + east_connections
-    remaining = [r for r in rooms if r not in ["Office", "West Hall", "East Hall"] + all_connected]
-    
-    # Ensure all remaining rooms are connected
-    for room in remaining:
-        if not graph[room]:  # If room has no connections
-            # Connect to a random already-connected room
-            candidates = [r for r in all_connected if r != room]
-            if candidates:
-                target = rng.choice(candidates)
-                graph[room].append(target)
-                graph[target].append(room)
-                all_connected.append(room)
-    
-    # Add some random additional connections for variety (1-3 per room on average)
-    for room in rooms:
-        if room == "Office":
-            continue  # Office only has 2 connections
-        
-        # Randomly add 0-2 more connections
-        num_extra = rng.randint(0, 2)
-        for _ in range(num_extra):
-            # Exclude Office from candidates to prevent adding connections to it
-            candidates = [r for r in rooms if r != room and r not in graph[room] and r != "Office"]
-            if candidates:
-                target = rng.choice(candidates)
-                graph[room].append(target)
-                graph[target].append(room)
+    # Use the fixed room graph defined at the top of the file
+    # ROOM_GRAPH is already defined with the standard layout
+    graph = {
+        "Office": ["West Hall", "East Hall"],
+        "West Hall": ["Office", "Cafeteria", "Gym", "Supply Closet"],
+        "East Hall": ["Office", "Library", "Bathrooms", "Restrooms"],
+        "Cafeteria": ["West Hall", "Dining Area", "Library"],
+        "Dining Area": ["Cafeteria", "Stage", "Kitchen"],
+        "Stage": ["Dining Area", "Backstage"],
+        "Backstage": ["Stage", "Kitchen"],
+        "Kitchen": ["Dining Area", "Backstage", "East Hall"],
+        "Gym": ["West Hall", "Cafeteria"],
+        "Library": ["Cafeteria", "East Hall", "Bathrooms"],
+        "Bathrooms": ["Library", "East Hall", "Vent"],
+        "Vent": ["Bathrooms", "Restrooms"],
+        "Supply Closet": ["West Hall"],
+        "Restrooms": ["East Hall", "Vent"],
+    }
     
     ROOM_GRAPH = graph
+    rooms = list(graph.keys())
     
-    # Generate positions for minimap using force-directed layout
+    # Generate positions for minimap using force-directed layout with randomization
     generate_room_positions(rooms, graph, rng)
     
     return graph
 
 
 def generate_room_positions(rooms, graph, rng):
-    """Generate 2D positions for rooms using a simple force-directed algorithm"""
+    """Generate 2D positions for rooms using a simple force-directed algorithm with randomization"""
     global ROOM_POSITIONS
     
-    # Initialize positions randomly
+    # Initialize positions randomly with more variation
     positions = {}
     for i, room in enumerate(rooms):
         if room == "Office":
-            # Office at bottom center
-            positions[room] = [0.5, 0.85]
+            # Office at bottom center (with slight variation)
+            positions[room] = [0.5 + rng.uniform(-0.05, 0.05), 0.85 + rng.uniform(-0.02, 0.02)]
         elif room == "West Hall":
-            # West Hall to the left of Office
-            positions[room] = [0.3, 0.85]
+            # West Hall to the left of Office (with variation)
+            positions[room] = [0.3 + rng.uniform(-0.1, 0.1), 0.85 + rng.uniform(-0.02, 0.02)]
         elif room == "East Hall":
-            # East Hall to the right of Office
-            positions[room] = [0.7, 0.85]
+            # East Hall to the right of Office (with variation)
+            positions[room] = [0.7 + rng.uniform(-0.1, 0.1), 0.85 + rng.uniform(-0.02, 0.02)]
         else:
-            # Random position for other rooms
+            # Random position for other rooms (more spread out)
             positions[room] = [rng.uniform(0.1, 0.9), rng.uniform(0.1, 0.7)]
     
-    # Force-directed layout iterations
-    for iteration in range(100):
+    # Force-directed layout iterations (fewer iterations for more randomness)
+    for iteration in range(50):
         forces = {room: [0, 0] for room in rooms}
         
         # Repulsion between all nodes
@@ -409,15 +348,24 @@ def generate_room_positions(rooms, graph, rng):
                     forces[room1][0] += fx
                     forces[room1][1] += fy
         
-        # Apply forces (but keep Office, West Hall, East Hall fixed)
+        # Apply forces (keep hallways more constrained, but allow some movement)
         for room in rooms:
-            if room not in ["Office", "West Hall", "East Hall"]:
+            if room == "Office":
+                # Office stays mostly fixed but can move a tiny bit
+                positions[room][0] += forces[room][0] * 0.1
+                positions[room][1] += forces[room][1] * 0.1
+            elif room in ["West Hall", "East Hall"]:
+                # Halls can move more but still constrained
+                positions[room][0] += forces[room][0] * 0.3
+                positions[room][1] += forces[room][1] * 0.3
+            else:
+                # Other rooms move freely
                 positions[room][0] += forces[room][0] * 0.5
                 positions[room][1] += forces[room][1] * 0.5
-                
-                # Keep within bounds
-                positions[room][0] = max(0.05, min(0.95, positions[room][0]))
-                positions[room][1] = max(0.05, min(0.75, positions[room][1]))
+            
+            # Keep within bounds
+            positions[room][0] = max(0.05, min(0.95, positions[room][0]))
+            positions[room][1] = max(0.05, min(0.75, positions[room][1]))
     
     ROOM_POSITIONS = positions
 

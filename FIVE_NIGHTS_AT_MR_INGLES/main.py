@@ -278,7 +278,7 @@ def generate_map(seed=None):
     core_rooms = ["Office", "West Hall", "East Hall"]
     
     # Select additional rooms from pool
-    available_names = [name for name in ROOM_NAME_POOL]
+    available_names = ROOM_NAME_POOL.copy()
     rng.shuffle(available_names)
     additional_rooms = available_names[:num_rooms - 3]
     
@@ -320,7 +320,7 @@ def generate_map(seed=None):
     
     # Add some cross-section connections (1-2) to make map more interesting
     if left_section and right_section:
-        num_cross = min(2, min(len(left_section), len(right_section)))
+        num_cross = min(2, len(left_section), len(right_section))
         for _ in range(num_cross):
             left_room = rng.choice(left_section)
             right_room = rng.choice(right_section)
@@ -371,13 +371,15 @@ def create_section_connections(graph, rooms, rng):
 
 def ensure_connectivity(graph, all_rooms, rng):
     """Ensure all rooms are reachable from Office using BFS"""
+    from collections import deque
+    
     # Find all reachable rooms from Office
     visited = set()
-    queue = ["Office"]
+    queue = deque(["Office"])
     visited.add("Office")
     
     while queue:
-        current = queue.pop(0)
+        current = queue.popleft()
         for neighbor in graph[current]:
             if neighbor not in visited:
                 visited.add(neighbor)
@@ -406,26 +408,31 @@ def generate_room_positions(rooms, graph, rng):
     west_side_rooms = set()
     east_side_rooms = set()
     
-    def categorize_rooms(room, visited, side):
-        """Recursively categorize rooms by which hall they're closest to"""
-        if room in visited or room == "Office":
-            return
-        visited.add(room)
-        side.add(room)
-        for neighbor in graph.get(room, []):
-            if neighbor not in visited and neighbor not in ["Office", "West Hall", "East Hall"]:
-                categorize_rooms(neighbor, visited, side)
+    def categorize_rooms_iterative(start_room, side):
+        """Iteratively categorize rooms by which hall they're closest to"""
+        visited = set()
+        stack = [start_room]
+        
+        while stack:
+            room = stack.pop()
+            if room in visited or room == "Office":
+                continue
+            visited.add(room)
+            side.add(room)
+            
+            for neighbor in graph.get(room, []):
+                if neighbor not in visited and neighbor not in ["Office", "West Hall", "East Hall"]:
+                    stack.append(neighbor)
     
     # Categorize rooms from West Hall
-    visited = set()
     for room in graph.get("West Hall", []):
         if room not in ["Office", "East Hall"]:
-            categorize_rooms(room, visited, west_side_rooms)
+            categorize_rooms_iterative(room, west_side_rooms)
     
     # Categorize rooms from East Hall
     for room in graph.get("East Hall", []):
         if room not in ["Office", "West Hall"]:
-            categorize_rooms(room, visited, east_side_rooms)
+            categorize_rooms_iterative(room, east_side_rooms)
     
     # Initialize positions with better spatial distribution
     positions = {}

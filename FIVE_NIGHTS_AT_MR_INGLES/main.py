@@ -1873,14 +1873,12 @@ class Game:
             target_offset_x = -max_offset_x  # Maximum left pan
         else:
             # In center area - interpolate
-            pan_range = center_x - self.office_pan_edge_threshold
-            if abs(pan_range) > self.office_pan_epsilon:
-                center_distance = (mouse_x - center_x) / pan_range
-                # Clamp center_distance to [-1, 1] to prevent extreme values
-                center_distance = max(-1.0, min(1.0, center_distance))
-                target_offset_x = -center_distance * max_offset_x
-            else:
-                target_offset_x = 0.0
+            # Ensure pan_range is positive (handle small resolutions where threshold > center)
+            pan_range = max(self.office_pan_epsilon, center_x - self.office_pan_edge_threshold)
+            center_distance = (mouse_x - center_x) / pan_range
+            # Clamp center_distance to [-1, 1] to prevent extreme values
+            center_distance = max(-1.0, min(1.0, center_distance))
+            target_offset_x = -center_distance * max_offset_x
         
         # Vertical panning (subtle, FNAF doesn't pan much vertically)
         center_y = self.game_state.height / 2
@@ -1892,14 +1890,12 @@ class Game:
             target_offset_y = -max_offset_y  # Maximum up pan
         else:
             # In center area - interpolate
-            pan_range = center_y - self.office_pan_edge_threshold
-            if abs(pan_range) > self.office_pan_epsilon:
-                center_distance = (mouse_y - center_y) / pan_range
-                # Clamp center_distance to [-1, 1] to prevent extreme values
-                center_distance = max(-1.0, min(1.0, center_distance))
-                target_offset_y = -center_distance * max_offset_y
-            else:
-                target_offset_y = 0.0
+            # Ensure pan_range is positive (handle small resolutions where threshold > center)
+            pan_range = max(self.office_pan_epsilon, center_y - self.office_pan_edge_threshold)
+            center_distance = (mouse_y - center_y) / pan_range
+            # Clamp center_distance to [-1, 1] to prevent extreme values
+            center_distance = max(-1.0, min(1.0, center_distance))
+            target_offset_y = -center_distance * max_offset_y
         
         # Smoothly interpolate to target position (frame-rate independent lerp)
         # Uses exponential decay: new_value = target + (old_value - target) * decay^dt

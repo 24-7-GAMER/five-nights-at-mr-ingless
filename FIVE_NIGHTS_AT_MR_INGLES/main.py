@@ -232,132 +232,179 @@ class Jumpscare:
 # ROOM GRAPH AND NAVIGATION
 # =====================================================
 
-# Fixed room graph with all rooms and connections
-# Office always connects to exactly 2 rooms: West Hall and East Hall
-# All connections are bidirectional
-ROOM_GRAPH = {
-    "Office": ["West Hall", "East Hall"],
-    "West Hall": ["Office", "Cafeteria", "Main Hall", "Hallway A"],
-    "East Hall": ["Office", "Kitchen", "Library", "Hallway B"],
-    "Cafeteria": ["West Hall", "Dining Area", "Stage"],
-    "Dining Area": ["Cafeteria", "Kitchen", "Restrooms"],
-    "Stage": ["Cafeteria", "Backstage", "Auditorium"],
-    "Backstage": ["Stage", "Storage", "Server Room"],
-    "Kitchen": ["East Hall", "Dining Area", "Supply Closet"],
-    "Gym": ["Main Hall", "Locker Room", "Hallway C"],
-    "Library": ["East Hall", "Computer Lab", "Science Lab"],
-    "Bathrooms": ["Hallway A", "Janitor Closet"],
-    "Restrooms": ["Dining Area", "Hallway B"],
-    "Vent": ["Supply Closet", "Janitor Closet", "Server Room"],
-    "Supply Closet": ["Kitchen", "Vent", "Storage"],
-    "Storage": ["Backstage", "Supply Closet", "Server Room"],
-    "Hallway A": ["West Hall", "Bathrooms", "Classroom 1"],
-    "Hallway B": ["East Hall", "Restrooms", "Classroom 2"],
-    "Hallway C": ["Gym", "Art Room"],
-    "Classroom 1": ["Hallway A", "Science Lab"],
-    "Classroom 2": ["Hallway B", "Computer Lab"],
-    "Science Lab": ["Library", "Classroom 1", "Art Room"],
-    "Computer Lab": ["Library", "Classroom 2", "Server Room"],
-    "Art Room": ["Science Lab", "Hallway C", "Auditorium"],
-    "Main Hall": ["West Hall", "Gym", "Janitor Closet"],
-    "Server Room": ["Backstage", "Storage", "Vent", "Computer Lab"],
-    "Janitor Closet": ["Main Hall", "Bathrooms", "Vent"],
-    "Locker Room": ["Gym", "Auditorium"],
-    "Auditorium": ["Stage", "Art Room", "Locker Room"]
-}
+# Pool of room names for procedural generation
+ROOM_NAME_POOL = [
+    "Office", "West Hall", "East Hall", "Cafeteria", "Dining Area", "Stage", 
+    "Backstage", "Kitchen", "Gym", "Library", "Bathrooms", "Restrooms", "Vent",
+    "Supply Closet", "Storage", "Hallway A", "Hallway B", "Hallway C",
+    "Classroom 1", "Classroom 2", "Science Lab", "Computer Lab", "Art Room",
+    "Main Hall", "Server Room", "Janitor Closet", "Locker Room", "Auditorium",
+    "Break Room", "Security Room", "Utility Room", "Maintenance", "Workshop"
+]
+
+# Dynamic room graph (generated each night)
+ROOM_GRAPH = {}
 
 # Dynamic room positions (updated by generate_map)
 ROOM_POSITIONS = {}
 
 
 def generate_map(seed=None):
-    """Generate random room positions using the fixed room graph.
+    """Generate a procedurally created room graph with random structure and positions.
     
-    The room graph structure is fixed with all 28 rooms:
-    - Office always has exactly 2 connections: West Hall (left) and East Hall (right)
-    - All rooms are present in every playthrough
-    - Only positions are randomized each time
+    Creates a unique map for each playthrough with:
+    - Variable number of rooms (12-18)
+    - Procedurally generated connections
+    - Random office position (not always bottom center)
+    - Guaranteed connectivity via BFS validation
+    - Variable office connections (2-3 adjacent rooms)
     
     Args:
-        seed: Random seed for position generation
+        seed: Random seed for generation
     
     Returns:
-        The fixed ROOM_GRAPH dictionary
+        The generated ROOM_GRAPH dictionary
     """
-    global ROOM_POSITIONS
+    global ROOM_GRAPH, ROOM_POSITIONS
     
     if seed is not None:
         rng = random.Random(seed)
     else:
         rng = random.Random()
     
-    # Get all rooms from the fixed graph
-    all_rooms = list(ROOM_GRAPH.keys())
+    # Determine number of rooms for this map
+    num_rooms = rng.randint(12, 18)
     
-    # Generate randomized positions for minimap
-    generate_room_positions(all_rooms, ROOM_GRAPH, rng)
+    # Always include Office, then select random rooms from pool
+    selected_rooms = ["Office"]
+    available_names = [name for name in ROOM_NAME_POOL if name != "Office"]
+    selected_rooms.extend(rng.sample(available_names, num_rooms - 1))
+    
+    # Generate graph structure
+    ROOM_GRAPH = generate_connected_graph(selected_rooms, rng)
+    
+    # Generate room positions for minimap
+    generate_room_positions(selected_rooms, ROOM_GRAPH, rng)
     
     return ROOM_GRAPH
 
 
+def generate_connected_graph(rooms, rng):
+    """Generate a connected graph structure ensuring all rooms are reachable.
+    
+    Uses a modified Prim's algorithm to build a spanning tree, then adds
+    extra edges for interesting pathways.
+    
+    Args:
+        rooms: List of room names
+        rng: Random number generator
+    
+    Returns:
+        Dictionary mapping room names to lists of connected rooms
+    """
+    graph = {room: [] for room in rooms}
+    
+    # Start with Office as root
+    in_tree = {"Office"}
+    not_in_tree = set(rooms) - in_tree
+    
+    # Build minimum spanning tree
+    while not_in_tree:
+        # Pick random room from tree and random room not in tree
+        from_room = rng.choice(list(in_tree))
+        to_room = rng.choice(list(not_in_tree))
+        
+        # Add bidirectional connection
+        graph[from_room].append(to_room)
+        graph[to_room].append(from_room)
+        
+        # Move to_room into tree
+        in_tree.add(to_room)
+        not_in_tree.remove(to_room)
+    
+    # Add extra connections for complexity (25-40% more edges)
+    num_extra_edges = rng.randint(len(rooms) // 4, len(rooms) * 2 // 5)
+    
+    for _ in range(num_extra_edges):
+        room1 = rng.choice(rooms)
+        room2 = rng.choice(rooms)
+        
+        # Don't connect a room to itself or create duplicate connections
+        if room1 != room2 and room2 not in graph[room1]:
+            # Limit connections per room to avoid overly dense graphs
+            if len(graph[room1]) < 5 and len(graph[room2]) < 5:
+                graph[room1].append(room2)
+                graph[room2].append(room1)
+    
+    # Ensure Office has at least 2 connections for gameplay
+    while len(graph["Office"]) < 2:
+        candidate = rng.choice([r for r in rooms if r != "Office"])
+        if candidate not in graph["Office"] and len(graph[candidate]) < 5:
+            graph["Office"].append(candidate)
+            graph[candidate].append("Office")
+    
+    # Validate connectivity
+    if not is_graph_connected(graph, rooms):
+        # Fallback: regenerate if somehow disconnected
+        return generate_connected_graph(rooms, rng)
+    
+    return graph
+
+
+def is_graph_connected(graph, rooms):
+    """Check if all rooms are reachable from Office using BFS."""
+    if not rooms or "Office" not in rooms:
+        return False
+    
+    visited = set()
+    queue = ["Office"]
+    
+    while queue:
+        room = queue.pop(0)
+        if room in visited:
+            continue
+        visited.add(room)
+        
+        for neighbor in graph.get(room, []):
+            if neighbor not in visited:
+                queue.append(neighbor)
+    
+    return len(visited) == len(rooms)
+
+
 def generate_room_positions(rooms, graph, rng):
-    """Generate 2D positions for rooms using an improved layout algorithm that reduces line crossings"""
+    """Generate 2D positions for rooms using force-directed layout algorithm.
+    
+    Creates neat, well-spaced room layouts with minimal line crossings.
+    Office position is randomized within a designated zone.
+    """
     global ROOM_POSITIONS
     
-    # Determine which rooms connect to which hall (for better initial placement)
-    west_side_rooms = set()
-    east_side_rooms = set()
-    
-    def categorize_rooms_iterative(start_room, side):
-        """Iteratively categorize rooms by which hall they're closest to"""
-        visited = set()
-        stack = [start_room]
-        
-        while stack:
-            room = stack.pop()
-            if room in visited or room == "Office":
-                continue
-            visited.add(room)
-            side.add(room)
-            
-            for neighbor in graph.get(room, []):
-                if neighbor not in visited and neighbor not in ["Office", "West Hall", "East Hall"]:
-                    stack.append(neighbor)
-    
-    # Categorize rooms from West Hall
-    for room in graph.get("West Hall", []):
-        if room not in ["Office", "East Hall"]:
-            categorize_rooms_iterative(room, west_side_rooms)
-    
-    # Categorize rooms from East Hall
-    for room in graph.get("East Hall", []):
-        if room not in ["Office", "West Hall"]:
-            categorize_rooms_iterative(room, east_side_rooms)
-    
-    # Initialize positions with better spatial distribution
+    # Initialize positions randomly
     positions = {}
-    for i, room in enumerate(rooms):
+    for room in rooms:
         if room == "Office":
-            # Office at bottom center
-            positions[room] = [0.5, 0.85]
-        elif room == "West Hall":
-            # West Hall to the left of Office
-            positions[room] = [0.25 + rng.uniform(-0.05, 0.05), 0.85 + rng.uniform(-0.02, 0.02)]
-        elif room == "East Hall":
-            # East Hall to the right of Office
-            positions[room] = [0.75 + rng.uniform(-0.05, 0.05), 0.85 + rng.uniform(-0.02, 0.02)]
-        elif room in west_side_rooms:
-            # Position on left side (west)
-            positions[room] = [rng.uniform(0.1, 0.4), rng.uniform(0.15, 0.75)]
-        elif room in east_side_rooms:
-            # Position on right side (east)
-            positions[room] = [rng.uniform(0.6, 0.9), rng.uniform(0.15, 0.75)]
+            # Office can be in bottom half, but not always centered
+            positions[room] = [rng.uniform(0.3, 0.7), rng.uniform(0.6, 0.85)]
         else:
-            # Middle area for any uncategorized rooms
-            positions[room] = [rng.uniform(0.35, 0.65), rng.uniform(0.2, 0.7)]
+            # Other rooms spread across the map
+            positions[room] = [rng.uniform(0.1, 0.9), rng.uniform(0.1, 0.75)]
     
-    # Force-directed layout iterations for better layout quality (more iterations for better results)
-    for iteration in range(200):
+    # Get office neighbors for special positioning
+    office_neighbors = graph.get("Office", [])
+    
+    # Position office neighbors closer initially for better layout
+    for i, neighbor in enumerate(office_neighbors):
+        angle = (i / len(office_neighbors)) * 2 * math.pi
+        offset_x = math.cos(angle) * 0.15
+        offset_y = math.sin(angle) * 0.15
+        positions[neighbor] = [
+            positions["Office"][0] + offset_x,
+            positions["Office"][1] + offset_y
+        ]
+    
+    # Force-directed layout iterations for neat positioning
+    for iteration in range(250):
         forces = {room: [0, 0] for room in rooms}
         
         # Repulsion between all nodes (prevents overlap)
@@ -367,8 +414,8 @@ def generate_room_positions(rooms, graph, rng):
                 dy = positions[room2][1] - positions[room1][1]
                 dist = max(0.01, math.sqrt(dx*dx + dy*dy))
                 
-                # Stronger repulsive force for closer nodes
-                force = 0.02 / (dist * dist)
+                # Strong repulsive force for close nodes (neat separation)
+                force = 0.03 / (dist * dist)
                 fx = (dx / dist) * force
                 fy = (dy / dist) * force
                 
@@ -377,7 +424,7 @@ def generate_room_positions(rooms, graph, rng):
                 forces[room2][0] += fx
                 forces[room2][1] += fy
         
-        # Attraction between connected nodes (keeps graph connected)
+        # Attraction between connected nodes (keeps connections short)
         for room1, neighbors in graph.items():
             for room2 in neighbors:
                 if room2 in positions:
@@ -385,43 +432,35 @@ def generate_room_positions(rooms, graph, rng):
                     dy = positions[room2][1] - positions[room1][1]
                     dist = max(0.01, math.sqrt(dx*dx + dy*dy))
                     
-                    # Attractive force (spring) - stronger for shorter distances
-                    force = dist * 0.06
+                    # Spring force pulls connected nodes together
+                    force = dist * 0.08
                     fx = (dx / dist) * force
                     fy = (dy / dist) * force
                     
                     forces[room1][0] += fx
                     forces[room1][1] += fy
         
-        # Horizontal bias to keep left/right separation (stronger bias)
+        # Gravity toward center (prevents spreading too far)
         for room in rooms:
-            if room in west_side_rooms:
-                # Push west rooms leftward more strongly
-                if positions[room][0] > 0.42:
-                    forces[room][0] -= 0.03
-            elif room in east_side_rooms:
-                # Push east rooms rightward more strongly
-                if positions[room][0] < 0.58:
-                    forces[room][0] += 0.03
+            center_pull = 0.005
+            forces[room][0] += (0.5 - positions[room][0]) * center_pull
+            forces[room][1] += (0.4 - positions[room][1]) * center_pull
         
         # Apply forces with damping
+        damping = 0.6
         for room in rooms:
             if room == "Office":
-                # Office stays fixed at bottom center
-                positions[room][0] = 0.5
-                positions[room][1] = 0.85
-            elif room in ["West Hall", "East Hall"]:
-                # Halls can move slightly but stay near office
-                positions[room][0] += forces[room][0] * 0.3
-                positions[room][1] += forces[room][1] * 0.3
+                # Office moves less but still adjusts
+                positions[room][0] += forces[room][0] * damping * 0.4
+                positions[room][1] += forces[room][1] * damping * 0.4
             else:
                 # Other rooms move freely
-                positions[room][0] += forces[room][0] * 0.5
-                positions[room][1] += forces[room][1] * 0.5
+                positions[room][0] += forces[room][0] * damping
+                positions[room][1] += forces[room][1] * damping
             
             # Keep within bounds
             positions[room][0] = max(0.05, min(0.95, positions[room][0]))
-            positions[room][1] = max(0.05, min(0.75, positions[room][1]))
+            positions[room][1] = max(0.05, min(0.85, positions[room][1]))
     
     ROOM_POSITIONS = positions
 
@@ -1168,7 +1207,7 @@ class Game:
         self.tutorial_slides = [
             {"title": "BASIC CONTROLS", "text": "Use Q and E to control doors\nPress F to toggle flashlight\nPress TAB to open cameras\nClose doors when animatronics approach"},
             {"title": "CAMERA SYSTEM", "text": "Watch 10 different rooms\nAnimatronics move through them\nClick minimap to jump to rooms\nStay vigilant at all times"},
-            {"title": "MULTIPLE PATHS", "text": "Two hallways lead to your office\nWest Hall on the left side\nEast Hall on the right side\nMonitor both carefully"},
+            {"title": "MULTIPLE PATHS", "text": "Multiple rooms connect to your office\nAnimatronics can approach from any side\nUse the minimap to track their positions\nMonitor all connections carefully"},
             {"title": "POWER MANAGEMENT", "text": "Power surges at :15, :30, :45\nCameras drain power when viewing\nDoors drain power when closed\nBalance usage to survive"},
             {"title": "AI BEHAVIOR", "text": "Each animatronic has unique traits\nThey patrol different routes\nSome are fast, others are sneaky\nLearn their patterns"},
             {"title": "DOOR HEALTH", "text": "Doors can jam if damaged\nAnimatronics wear them down\nJammed doors leave you exposed\nPrevent attacks to preserve them"},
@@ -1464,8 +1503,10 @@ class Game:
             return base + self.rng.uniform(-spread, spread)
         
         # Get available rooms for animatronic starting positions
+        # Exclude Office and its immediate neighbors from starting positions
+        office_neighbors = get_neighbors("Office")
         available_rooms = [room for room in ROOM_GRAPH.keys() 
-                          if room not in ["Office", "West Hall", "East Hall"]]
+                          if room != "Office" and room not in office_neighbors]
         
         # Ensure we have enough rooms
         if len(available_rooms) < 4:
@@ -1500,11 +1541,11 @@ class Game:
                 visited.add(next_room)
                 current = next_room
             
-            # Add hallways to make them approach the office
-            if "West Hall" not in route and self.rng.random() < 0.6:
-                route.append("West Hall")
-            if "East Hall" not in route and self.rng.random() < 0.6:
-                route.append("East Hall")
+            # Add office-adjacent rooms to make them approach the office
+            office_adjacent = get_neighbors("Office")
+            for adj_room in office_adjacent:
+                if adj_room not in route and self.rng.random() < 0.6:
+                    route.append(adj_room)
             
             return route
 
@@ -1806,7 +1847,9 @@ class Game:
             stress_level += 0.3
         if self.power.outage:
             stress_level += 0.5
-        if any(a.room in ["West Hall", "East Hall"] for a in self.animatronics):
+        # Check if any animatronics are adjacent to office
+        office_neighbors = get_neighbors("Office")
+        if any(a.room in office_neighbors for a in self.animatronics):
             stress_level += 0.2
         
         self.game_state.chromatic_aberration = stress_level
@@ -2310,22 +2353,25 @@ class Game:
         
         # Third pass: check for attacks and blocked behaviors
         for anim in self.animatronics:
-            # Check if animatronic is adjacent to office (West Hall, East Hall, or Supply Closet on left side)
+            # Check if animatronic is adjacent to office
             is_adjacent_to_office = anim.room in get_neighbors("Office")
             
             if is_adjacent_to_office:
                 # Determine which door(s) they're trying to pressure based on their position
-                if anim.room == "West Hall":
+                # Use room position to determine left vs right side
+                office_pos = ROOM_POSITIONS.get("Office", [0.5, 0.5])
+                anim_pos = ROOM_POSITIONS.get(anim.room, [0.5, 0.5])
+                
+                # Room is on the left if its x position is less than office
+                is_left_side = anim_pos[0] < office_pos[0]
+                
+                if is_left_side:
                     door_closed = self.office.door_left_closed
                     pressure_left = True
                     pressure_right = False
-                elif anim.room == "East Hall":
+                else:
                     door_closed = self.office.door_right_closed
                     pressure_left = False
-                    pressure_right = True
-                else:
-                    door_closed = self.office.door_left_closed or self.office.door_right_closed
-                    pressure_left = True
                     pressure_right = True
 
                 if door_closed:

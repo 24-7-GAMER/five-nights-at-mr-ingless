@@ -232,172 +232,72 @@ class Jumpscare:
 # ROOM GRAPH AND NAVIGATION
 # =====================================================
 
-# Room name pool for procedural generation
-ROOM_NAME_POOL = [
-    "Cafeteria", "Dining Area", "Stage", "Backstage", "Kitchen",
-    "Gym", "Library", "Bathrooms", "Restrooms", "Vent",
-    "Supply Closet", "Storage", "Hallway A", "Hallway B", "Hallway C",
-    "Classroom 1", "Classroom 2", "Science Lab", "Computer Lab", "Art Room",
-    "Main Hall", "Server Room", "Janitor Closet", "Locker Room", "Auditorium"
-]
-
-# Global room graph (dynamically generated)
-ROOM_GRAPH = {}
+# Fixed room graph with all rooms and connections
+# Office always connects to exactly 2 rooms: West Hall and East Hall
+# All connections are bidirectional
+ROOM_GRAPH = {
+    "Office": ["West Hall", "East Hall"],
+    "West Hall": ["Office", "Cafeteria", "Main Hall", "Hallway A"],
+    "East Hall": ["Office", "Kitchen", "Library", "Hallway B"],
+    "Cafeteria": ["West Hall", "Dining Area", "Stage"],
+    "Dining Area": ["Cafeteria", "Kitchen", "Restrooms"],
+    "Stage": ["Cafeteria", "Backstage", "Auditorium"],
+    "Backstage": ["Stage", "Storage", "Server Room"],
+    "Kitchen": ["East Hall", "Dining Area", "Supply Closet"],
+    "Gym": ["Main Hall", "Locker Room", "Hallway C"],
+    "Library": ["East Hall", "Computer Lab", "Science Lab"],
+    "Bathrooms": ["Hallway A", "Janitor Closet"],
+    "Restrooms": ["Dining Area", "Hallway B"],
+    "Vent": ["Supply Closet", "Janitor Closet", "Server Room"],
+    "Supply Closet": ["Kitchen", "Vent", "Storage"],
+    "Storage": ["Backstage", "Supply Closet", "Server Room"],
+    "Hallway A": ["West Hall", "Bathrooms", "Classroom 1"],
+    "Hallway B": ["East Hall", "Restrooms", "Classroom 2"],
+    "Hallway C": ["Gym", "Art Room"],
+    "Classroom 1": ["Hallway A", "Science Lab"],
+    "Classroom 2": ["Hallway B", "Computer Lab"],
+    "Science Lab": ["Library", "Classroom 1", "Art Room"],
+    "Computer Lab": ["Library", "Classroom 2", "Server Room"],
+    "Art Room": ["Science Lab", "Hallway C", "Auditorium"],
+    "Main Hall": ["West Hall", "Gym", "Janitor Closet"],
+    "Server Room": ["Backstage", "Storage", "Vent", "Computer Lab"],
+    "Janitor Closet": ["Main Hall", "Bathrooms", "Vent"],
+    "Locker Room": ["Gym", "Auditorium"],
+    "Auditorium": ["Stage", "Art Room", "Locker Room"]
+}
 
 # Dynamic room positions (updated by generate_map)
 ROOM_POSITIONS = {}
 
 
 def generate_map(seed=None):
-    """Generate a completely new random room graph and positions.
+    """Generate random room positions using the fixed room graph.
     
-    Creates a procedurally generated map with:
-    - 10-15 unique rooms
+    The room graph structure is fixed with all 28 rooms:
     - Office always has exactly 2 connections: West Hall (left) and East Hall (right)
-    - All rooms are reachable from Office
-    - Connections are bidirectional
-    - Reduced line crossings through smart layout
+    - All rooms are present in every playthrough
+    - Only positions are randomized each time
     
     Args:
-        seed: Random seed for generation
+        seed: Random seed for position generation
     
     Returns:
-        The generated ROOM_GRAPH dictionary
+        The fixed ROOM_GRAPH dictionary
     """
-    global ROOM_GRAPH, ROOM_POSITIONS
+    global ROOM_POSITIONS
     
     if seed is not None:
         rng = random.Random(seed)
     else:
         rng = random.Random()
     
-    # Decide number of rooms (10-15 total, including Office and halls)
-    num_rooms = rng.randint(10, 15)
+    # Get all rooms from the fixed graph
+    all_rooms = list(ROOM_GRAPH.keys())
     
-    # Core rooms that must exist
-    core_rooms = ["Office", "West Hall", "East Hall"]
-    
-    # Select additional rooms from pool
-    available_names = ROOM_NAME_POOL.copy()
-    rng.shuffle(available_names)
-    additional_rooms = available_names[:num_rooms - 3]
-    
-    all_rooms = core_rooms + additional_rooms
-    
-    # Initialize empty graph
-    ROOM_GRAPH = {room: [] for room in all_rooms}
-    
-    # Office ALWAYS connects to West Hall and East Hall (and ONLY these)
-    ROOM_GRAPH["Office"] = ["West Hall", "East Hall"]
-    ROOM_GRAPH["West Hall"].append("Office")
-    ROOM_GRAPH["East Hall"].append("Office")
-    
-    # Split remaining rooms into left and right sections
-    remaining_rooms = additional_rooms[:]
-    rng.shuffle(remaining_rooms)
-    
-    mid_point = len(remaining_rooms) // 2
-    left_section = remaining_rooms[:mid_point]
-    right_section = remaining_rooms[mid_point:]
-    
-    # Connect West Hall to left section rooms (2-4 connections)
-    num_west_connections = min(len(left_section), rng.randint(2, 4))
-    west_connected = rng.sample(left_section, num_west_connections) if left_section else []
-    for room in west_connected:
-        add_bidirectional_connection(ROOM_GRAPH, "West Hall", room)
-    
-    # Connect East Hall to right section rooms (2-4 connections)
-    num_east_connections = min(len(right_section), rng.randint(2, 4))
-    east_connected = rng.sample(right_section, num_east_connections) if right_section else []
-    for room in east_connected:
-        add_bidirectional_connection(ROOM_GRAPH, "East Hall", room)
-    
-    # Create connections within left section
-    create_section_connections(ROOM_GRAPH, left_section, rng)
-    
-    # Create connections within right section
-    create_section_connections(ROOM_GRAPH, right_section, rng)
-    
-    # Add some cross-section connections (1-2) to make map more interesting
-    if left_section and right_section:
-        num_cross = min(2, len(left_section), len(right_section))
-        for _ in range(num_cross):
-            left_room = rng.choice(left_section)
-            right_room = rng.choice(right_section)
-            # Only connect if not too many connections already
-            if len(ROOM_GRAPH[left_room]) < 4 and len(ROOM_GRAPH[right_room]) < 4:
-                add_bidirectional_connection(ROOM_GRAPH, left_room, right_room)
-    
-    # Ensure all rooms are reachable
-    ensure_connectivity(ROOM_GRAPH, all_rooms, rng)
-    
-    # Generate positions for minimap with improved layout
+    # Generate randomized positions for minimap
     generate_room_positions(all_rooms, ROOM_GRAPH, rng)
     
     return ROOM_GRAPH
-
-
-def add_bidirectional_connection(graph, room1, room2):
-    """Add a bidirectional connection between two rooms"""
-    if room2 not in graph[room1]:
-        graph[room1].append(room2)
-    if room1 not in graph[room2]:
-        graph[room2].append(room1)
-
-
-def create_section_connections(graph, rooms, rng):
-    """Create connections within a section of rooms"""
-    if len(rooms) < 2:
-        return
-    
-    # Create a connected path through the section
-    for i in range(len(rooms) - 1):
-        # Connect consecutive rooms
-        add_bidirectional_connection(graph, rooms[i], rooms[i + 1])
-    
-    # Add some additional connections (20-40% chance per pair)
-    for i in range(len(rooms)):
-        for j in range(i + 2, len(rooms)):
-            # Skip if already connected or too many connections
-            if rooms[j] in graph[rooms[i]]:
-                continue
-            if len(graph[rooms[i]]) >= 4 or len(graph[rooms[j]]) >= 4:
-                continue
-            
-            # Random chance to connect
-            if rng.random() < 0.3:
-                add_bidirectional_connection(graph, rooms[i], rooms[j])
-
-
-def ensure_connectivity(graph, all_rooms, rng):
-    """Ensure all rooms are reachable from Office using BFS"""
-    from collections import deque
-    
-    # Find all reachable rooms from Office
-    visited = set()
-    queue = deque(["Office"])
-    visited.add("Office")
-    
-    while queue:
-        current = queue.popleft()
-        for neighbor in graph[current]:
-            if neighbor not in visited:
-                visited.add(neighbor)
-                queue.append(neighbor)
-    
-    # Find unreachable rooms
-    unreachable = [room for room in all_rooms if room not in visited]
-    
-    # Connect unreachable rooms
-    for room in unreachable:
-        # Find a reachable room to connect to (prefer rooms with fewer connections)
-        candidates = [r for r in visited if len(graph[r]) < 4]
-        if not candidates:
-            candidates = list(visited)
-        
-        target = rng.choice(candidates)
-        add_bidirectional_connection(graph, room, target)
-        visited.add(room)
 
 
 def generate_room_positions(rooms, graph, rng):

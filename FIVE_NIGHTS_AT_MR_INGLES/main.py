@@ -255,7 +255,17 @@ ROOM_POSITIONS = {}
 
 
 def generate_map(seed=None):
-    """Generate randomized room positions using the fixed room graph layout"""
+    """Generate randomized room positions using the fixed room graph layout.
+    
+    Modifies the global ROOM_POSITIONS to contain new positions for all rooms
+    based on the seed. Returns the fixed ROOM_GRAPH structure.
+    
+    Args:
+        seed: Random seed for position generation (affects positions only, not graph structure)
+    
+    Returns:
+        The fixed ROOM_GRAPH dictionary
+    """
     global ROOM_POSITIONS
     
     if seed is not None:

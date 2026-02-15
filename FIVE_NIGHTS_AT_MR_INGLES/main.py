@@ -906,11 +906,12 @@ class Game:
         self.particles = []  # List of particle effects
         
         # Office camera panning (FNAF-style)
-        self.office_camera_offset_x = 0  # Current camera x offset
-        self.office_camera_offset_y = 0  # Current camera y offset
+        self.office_camera_offset_x = 0.0  # Current camera x offset (float for smooth lerp)
+        self.office_camera_offset_y = 0.0  # Current camera y offset (float for smooth lerp)
         self.office_zoom_factor = 1.2  # Zoom in by 20% to allow panning
-        self.office_pan_speed = 0.15  # Speed of camera movement (lerp factor)
+        self.office_pan_speed = 0.15  # Speed of camera movement (lerp factor, must be < 1.0)
         self.office_pan_edge_threshold = 200  # Pixels from edge to start panning
+        self.office_pan_epsilon = 0.01  # Epsilon for division by zero protection
         
         # Amazing new features
         self.threat_level = 0  # Real-time threat assessment 0-100
@@ -1855,59 +1856,63 @@ class Game:
         
         # Calculate target camera offset based on mouse position
         # Maximum offset is the difference between zoomed and normal size
+        # With 1.2x zoom, we have 0.2x extra space to pan
         zoom_delta = self.office_zoom_factor - 1
-        max_offset_x = int(self.game_state.width * zoom_delta)
-        max_offset_y = int(self.game_state.height * zoom_delta)
+        max_offset_x = self.game_state.width * zoom_delta  # Keep as float for smooth lerp
+        max_offset_y = self.game_state.height * zoom_delta
         
-        target_offset_x = 0
-        target_offset_y = 0
+        target_offset_x = 0.0
+        target_offset_y = 0.0
         
         # Horizontal panning
         center_x = self.game_state.width / 2
         if mouse_x < self.office_pan_edge_threshold:
             # Near left edge - pan right (show left side of image)
-            target_offset_x = 0  # Maximum right pan
+            target_offset_x = 0.0  # Maximum right pan
         elif mouse_x > self.game_state.width - self.office_pan_edge_threshold:
             # Near right edge - pan left (show right side of image)
             target_offset_x = -max_offset_x  # Maximum left pan
         else:
             # In center area - interpolate
             denominator = center_x - self.office_pan_edge_threshold
-            # Use small epsilon for division check to prevent discontinuity
-            if abs(denominator) > 0.01:
+            if abs(denominator) > self.office_pan_epsilon:
                 center_distance = (mouse_x - center_x) / denominator
                 # Clamp center_distance to [-1, 1] to prevent extreme values
                 center_distance = max(-1.0, min(1.0, center_distance))
-                target_offset_x = -int(center_distance * max_offset_x)
+                target_offset_x = -center_distance * max_offset_x
             else:
-                target_offset_x = 0
+                target_offset_x = 0.0
         
         # Vertical panning (subtle, FNAF doesn't pan much vertically)
         center_y = self.game_state.height / 2
         if mouse_y < self.office_pan_edge_threshold:
             # Near top edge - pan down (show top of image)
-            target_offset_y = 0  # Maximum down pan
+            target_offset_y = 0.0  # Maximum down pan
         elif mouse_y > self.game_state.height - self.office_pan_edge_threshold:
             # Near bottom edge - pan up (show bottom of image)
             target_offset_y = -max_offset_y  # Maximum up pan
         else:
             # In center area - interpolate
             denominator = center_y - self.office_pan_edge_threshold
-            # Use small epsilon for division check to prevent discontinuity
-            if abs(denominator) > 0.01:
+            if abs(denominator) > self.office_pan_epsilon:
                 center_distance = (mouse_y - center_y) / denominator
                 # Clamp center_distance to [-1, 1] to prevent extreme values
                 center_distance = max(-1.0, min(1.0, center_distance))
-                target_offset_y = -int(center_distance * max_offset_y)
+                target_offset_y = -center_distance * max_offset_y
             else:
-                target_offset_y = 0
+                target_offset_y = 0.0
         
         # Smoothly interpolate to target position (frame-rate independent lerp)
         # Uses exponential decay: new_value = target + (old_value - target) * decay^dt
         # The formula (1 - pow(1 - speed, dt * 60)) converts the per-frame speed (at 60fps)
         # into a time-based speed that works consistently across different frame rates
-        # Clamp to 1.0 to prevent overshoot in case of large dt values
-        lerp_factor = min(1.0, 1 - pow(1 - self.office_pan_speed, dt * 60))
+        # Handle edge case where pan_speed is 1.0 (instant movement)
+        if self.office_pan_speed >= 1.0:
+            lerp_factor = 1.0
+        else:
+            # Clamp to 1.0 to prevent overshoot in case of large dt values
+            lerp_factor = min(1.0, 1 - pow(1 - self.office_pan_speed, dt * 60))
+        
         self.office_camera_offset_x += (target_offset_x - self.office_camera_offset_x) * lerp_factor
         self.office_camera_offset_y += (target_offset_y - self.office_camera_offset_y) * lerp_factor
 
@@ -2862,9 +2867,9 @@ class Game:
                     scaled = pygame.transform.scale(office_img, (zoomed_width, zoomed_height))
                     self._overlay_surfaces[cache_key] = scaled
                 
-                # Apply camera offset (panning)
+                # Apply camera offset (panning) - convert float offsets to int for blitting
                 self.screen.blit(self._overlay_surfaces[cache_key], 
-                                (self.office_camera_offset_x, self.office_camera_offset_y))
+                                (int(self.office_camera_offset_x), int(self.office_camera_offset_y)))
             else:
                 # When cameras are open, show static office view
                 cache_key = f"office_bg_{self.game_state.width}_{self.game_state.height}"

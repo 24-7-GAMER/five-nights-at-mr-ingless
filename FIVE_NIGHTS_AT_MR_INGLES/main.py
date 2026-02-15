@@ -376,16 +376,16 @@ def generate_room_positions(rooms, graph, rng):
     """Generate 2D positions for rooms using force-directed layout algorithm.
     
     Creates neat, well-spaced room layouts with minimal line crossings.
-    Office position is randomized within a designated zone.
+    Office position is randomized and can be anywhere on the map.
     """
     global ROOM_POSITIONS
     
-    # Initialize positions randomly
+    # Initialize positions randomly with more variety
     positions = {}
     for room in rooms:
         if room == "Office":
-            # Office can be in bottom half, but not always centered
-            positions[room] = [rng.uniform(0.3, 0.7), rng.uniform(0.6, 0.85)]
+            # Office can be anywhere on the map (but favor central areas)
+            positions[room] = [rng.uniform(0.25, 0.75), rng.uniform(0.5, 0.8)]
         else:
             # Other rooms spread across the map
             positions[room] = [rng.uniform(0.1, 0.9), rng.uniform(0.1, 0.75)]
@@ -393,14 +393,14 @@ def generate_room_positions(rooms, graph, rng):
     # Get office neighbors for special positioning
     office_neighbors = graph.get("Office", [])
     
-    # Position office neighbors closer initially for better layout
+    # Position office neighbors in a circle around office initially
     for i, neighbor in enumerate(office_neighbors):
         angle = (i / len(office_neighbors)) * 2 * math.pi
         offset_x = math.cos(angle) * 0.15
         offset_y = math.sin(angle) * 0.15
         positions[neighbor] = [
-            positions["Office"][0] + offset_x,
-            positions["Office"][1] + offset_y
+            min(0.9, max(0.1, positions["Office"][0] + offset_x)),
+            min(0.75, max(0.1, positions["Office"][1] + offset_y))
         ]
     
     # Force-directed layout iterations for neat positioning
@@ -440,19 +440,21 @@ def generate_room_positions(rooms, graph, rng):
                     forces[room1][0] += fx
                     forces[room1][1] += fy
         
-        # Gravity toward center (prevents spreading too far)
+        # Very gentle gravity toward center (prevents extreme spreading)
+        # Only apply this weakly so office can still be off-center
         for room in rooms:
-            center_pull = 0.005
-            forces[room][0] += (0.5 - positions[room][0]) * center_pull
-            forces[room][1] += (0.4 - positions[room][1]) * center_pull
+            if room != "Office":  # Don't pull office to center
+                center_pull = 0.003
+                forces[room][0] += (0.5 - positions[room][0]) * center_pull
+                forces[room][1] += (0.4 - positions[room][1]) * center_pull
         
         # Apply forces with damping
         damping = 0.6
         for room in rooms:
             if room == "Office":
-                # Office moves less but still adjusts
-                positions[room][0] += forces[room][0] * damping * 0.4
-                positions[room][1] += forces[room][1] * damping * 0.4
+                # Office stays completely fixed at its initial random position
+                # Don't apply any forces to it
+                pass
             else:
                 # Other rooms move freely
                 positions[room][0] += forces[room][0] * damping

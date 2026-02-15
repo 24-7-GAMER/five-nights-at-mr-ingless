@@ -236,8 +236,8 @@ class Jumpscare:
 ROOM_GRAPH = {
     "Office": ["West Hall", "East Hall"],
     "West Hall": ["Office", "Cafeteria", "Gym", "Supply Closet"],
-    "East Hall": ["Office", "Library", "Bathrooms", "Restrooms"],
-    "Cafeteria": ["West Hall", "Dining Area", "Library"],
+    "East Hall": ["Office", "Library", "Bathrooms", "Restrooms", "Kitchen"],
+    "Cafeteria": ["West Hall", "Dining Area", "Library", "Gym"],
     "Dining Area": ["Cafeteria", "Stage", "Kitchen"],
     "Stage": ["Dining Area", "Backstage"],
     "Backstage": ["Stage", "Kitchen"],
@@ -263,13 +263,12 @@ def generate_map(seed=None):
     else:
         rng = random.Random()
     
-    # Use the fixed room graph defined at the top of the file
-    # ROOM_GRAPH is already defined with the standard layout
+    # Use the fixed room graph with proper bidirectional connections
     graph = {
         "Office": ["West Hall", "East Hall"],
         "West Hall": ["Office", "Cafeteria", "Gym", "Supply Closet"],
-        "East Hall": ["Office", "Library", "Bathrooms", "Restrooms"],
-        "Cafeteria": ["West Hall", "Dining Area", "Library"],
+        "East Hall": ["Office", "Library", "Bathrooms", "Restrooms", "Kitchen"],
+        "Cafeteria": ["West Hall", "Dining Area", "Library", "Gym"],
         "Dining Area": ["Cafeteria", "Stage", "Kitchen"],
         "Stage": ["Dining Area", "Backstage"],
         "Backstage": ["Stage", "Kitchen"],

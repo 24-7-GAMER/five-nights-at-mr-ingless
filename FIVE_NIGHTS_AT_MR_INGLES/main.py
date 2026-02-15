@@ -304,7 +304,8 @@ def generate_map(seed=None):
         if "West Hall" not in graph[room]:
             graph[room].append("West Hall")
     
-    # Connect East Hall to 2-4 random rooms (excluding Office, West Hall, and west connections)
+    # Connect East Hall to 2-4 random rooms (excluding Office, West Hall, and some west connections to ensure variety)
+    # We exclude first 2 west connections to prevent too much overlap between the two halls
     east_candidates = [r for r in rooms if r not in ["Office", "West Hall", "East Hall"] + west_connections[:2]]
     east_connections = rng.sample(east_candidates, min(rng.randint(2, 4), len(east_candidates)))
     for room in east_connections:
@@ -1468,6 +1469,7 @@ class Game:
         
         # Randomly select starting rooms for each animatronic
         start_rooms = self.rng.sample(available_rooms, min(4, len(available_rooms)))
+        # Allow duplicates if we don't have enough unique rooms - animatronics can start in same location
         if len(start_rooms) < 4:
             start_rooms.extend(self.rng.choices(available_rooms, k=4-len(start_rooms)))
         
@@ -1541,8 +1543,7 @@ class Game:
         self.set_status("")
         
         # Generate new map for this night
-        # Use night number as seed for reproducibility (each night will have the same map if replayed)
-        # But add the current time to make it different each time we start a night
+        # Map is randomized on each playthrough using current time to ensure variety
         map_seed = int(time.time() * 1000) + night * 1000
         generate_map(map_seed)
         

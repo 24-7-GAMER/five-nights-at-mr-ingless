@@ -256,38 +256,21 @@ ROOM_POSITIONS = {}
 
 def generate_map(seed=None):
     """Generate randomized room positions using the fixed room graph layout"""
-    global ROOM_GRAPH, ROOM_POSITIONS
+    global ROOM_POSITIONS
     
     if seed is not None:
         rng = random.Random(seed)
     else:
         rng = random.Random()
     
-    # Use the fixed room graph with proper bidirectional connections
-    graph = {
-        "Office": ["West Hall", "East Hall"],
-        "West Hall": ["Office", "Cafeteria", "Gym", "Supply Closet"],
-        "East Hall": ["Office", "Library", "Bathrooms", "Restrooms", "Kitchen"],
-        "Cafeteria": ["West Hall", "Dining Area", "Library", "Gym"],
-        "Dining Area": ["Cafeteria", "Stage", "Kitchen"],
-        "Stage": ["Dining Area", "Backstage"],
-        "Backstage": ["Stage", "Kitchen"],
-        "Kitchen": ["Dining Area", "Backstage", "East Hall"],
-        "Gym": ["West Hall", "Cafeteria"],
-        "Library": ["Cafeteria", "East Hall", "Bathrooms"],
-        "Bathrooms": ["Library", "East Hall", "Vent"],
-        "Vent": ["Bathrooms", "Restrooms"],
-        "Supply Closet": ["West Hall"],
-        "Restrooms": ["East Hall", "Vent"],
-    }
-    
-    ROOM_GRAPH = graph
-    rooms = list(graph.keys())
+    # Use the fixed room graph defined at the top of the file
+    # No need to regenerate it - just randomize positions
+    rooms = list(ROOM_GRAPH.keys())
     
     # Generate positions for minimap using force-directed layout with randomization
-    generate_room_positions(rooms, graph, rng)
+    generate_room_positions(rooms, ROOM_GRAPH, rng)
     
-    return graph
+    return ROOM_GRAPH
 
 
 def generate_room_positions(rooms, graph, rng):
@@ -310,8 +293,8 @@ def generate_room_positions(rooms, graph, rng):
             # Random position for other rooms (more spread out)
             positions[room] = [rng.uniform(0.1, 0.9), rng.uniform(0.1, 0.7)]
     
-    # Force-directed layout iterations (fewer iterations for more randomness)
-    for iteration in range(50):
+    # Force-directed layout iterations for better layout quality
+    for iteration in range(100):
         forces = {room: [0, 0] for room in rooms}
         
         # Repulsion between all nodes

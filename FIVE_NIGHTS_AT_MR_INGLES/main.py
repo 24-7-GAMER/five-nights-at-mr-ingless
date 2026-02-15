@@ -336,7 +336,8 @@ def generate_map(seed=None):
         # Randomly add 0-2 more connections
         num_extra = rng.randint(0, 2)
         for _ in range(num_extra):
-            candidates = [r for r in rooms if r != room and r not in graph[room]]
+            # Exclude Office from candidates to prevent adding connections to it
+            candidates = [r for r in rooms if r != room and r not in graph[room] and r != "Office"]
             if candidates:
                 target = rng.choice(candidates)
                 graph[room].append(target)

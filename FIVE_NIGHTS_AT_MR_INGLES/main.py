@@ -905,6 +905,13 @@ class Game:
         self.color_overlay_timer = 0
         self.particles = []  # List of particle effects
         
+        # Office camera panning (FNAF-style)
+        self.office_camera_offset_x = 0  # Current camera x offset
+        self.office_camera_offset_y = 0  # Current camera y offset
+        self.office_zoom_factor = 1.2  # Zoom in by 20% to allow panning
+        self.office_pan_speed = 0.15  # Speed of camera movement (lerp factor)
+        self.office_pan_edge_threshold = 200  # Pixels from edge to start panning
+        
         # Amazing new features
         self.threat_level = 0  # Real-time threat assessment 0-100
         self.audio_distraction_cooldown = 0
@@ -1829,6 +1836,59 @@ class Game:
 
         self.update_fairness_caps()
 
+    def update_office_camera_panning(self, dt):
+        """Update office camera panning based on mouse position (FNAF-style)"""
+        # Only pan when in office view (not looking at cameras)
+        if self.office.cams_open or self.game_state.state != "playing":
+            return
+        
+        # Get current mouse position
+        mouse_x, mouse_y = pygame.mouse.get_pos()
+        
+        # Scale mouse position from window coordinates to game coordinates
+        mouse_x = mouse_x * (self.game_state.width / self.window_width)
+        mouse_y = mouse_y * (self.game_state.height / self.window_height)
+        
+        # Calculate target camera offset based on mouse position
+        # Maximum offset is the difference between zoomed and normal size
+        max_offset_x = int(self.game_state.width * (self.office_zoom_factor - 1))
+        max_offset_y = int(self.game_state.height * (self.office_zoom_factor - 1))
+        
+        target_offset_x = 0
+        target_offset_y = 0
+        
+        # Horizontal panning
+        if mouse_x < self.office_pan_edge_threshold:
+            # Near left edge - pan right (show left side of image)
+            pan_strength = 1 - (mouse_x / self.office_pan_edge_threshold)
+            target_offset_x = 0  # Maximum right pan
+        elif mouse_x > self.game_state.width - self.office_pan_edge_threshold:
+            # Near right edge - pan left (show right side of image)
+            pan_strength = (mouse_x - (self.game_state.width - self.office_pan_edge_threshold)) / self.office_pan_edge_threshold
+            target_offset_x = -max_offset_x  # Maximum left pan
+        else:
+            # In center area - interpolate
+            center_distance = (mouse_x - self.game_state.width / 2) / (self.game_state.width / 2 - self.office_pan_edge_threshold)
+            target_offset_x = -int(center_distance * max_offset_x)
+        
+        # Vertical panning (subtle, FNAF doesn't pan much vertically)
+        if mouse_y < self.office_pan_edge_threshold:
+            # Near top edge - pan down (show top of image)
+            pan_strength = 1 - (mouse_y / self.office_pan_edge_threshold)
+            target_offset_y = 0  # Maximum down pan
+        elif mouse_y > self.game_state.height - self.office_pan_edge_threshold:
+            # Near bottom edge - pan up (show bottom of image)
+            pan_strength = (mouse_y - (self.game_state.height - self.office_pan_edge_threshold)) / self.office_pan_edge_threshold
+            target_offset_y = -max_offset_y  # Maximum up pan
+        else:
+            # In center area - interpolate
+            center_distance = (mouse_y - self.game_state.height / 2) / (self.game_state.height / 2 - self.office_pan_edge_threshold)
+            target_offset_y = -int(center_distance * max_offset_y)
+        
+        # Smoothly interpolate to target position (lerp)
+        self.office_camera_offset_x += (target_offset_x - self.office_camera_offset_x) * self.office_pan_speed
+        self.office_camera_offset_y += (target_offset_y - self.office_camera_offset_y) * self.office_pan_speed
+
     def update_fairness_caps(self):
         """Compute real-time caps to prevent impossible states"""
         doors_open = int(not self.office.door_left_closed) + int(not self.office.door_right_closed)
@@ -2449,6 +2509,7 @@ class Game:
             self.update_screen_effects(dt)
             self.update_threat_assessment(dt)
             self.update_audio_system(dt)
+            self.update_office_camera_panning(dt)  # Update camera panning
         elif self.game_state.state == "jumpscare":
             self.update_screen_effects(dt)
             self.jumpscare.timer += dt
@@ -2765,16 +2826,31 @@ class Game:
     # =====================================================
 
     def draw_background(self):
-        """Draw office background (optimized with caching)"""
+        """Draw office background (optimized with caching, with FNAF-style panning)"""
         office_img = self.assets.get_image("office")
         if office_img:
-            # Cache scaled background image
-            cache_key = f"office_bg_{self.game_state.width}_{self.game_state.height}"
-            if cache_key not in self._overlay_surfaces:
-                scaled = pygame.transform.scale(office_img, (self.game_state.width, self.game_state.height))
-                self._overlay_surfaces[cache_key] = scaled
-            
-            self.screen.blit(self._overlay_surfaces[cache_key], (0, 0))
+            # When not viewing cameras (office view), use zoomed and panned version
+            if not self.office.cams_open:
+                # Create zoomed version of office (cached)
+                zoomed_width = int(self.game_state.width * self.office_zoom_factor)
+                zoomed_height = int(self.game_state.height * self.office_zoom_factor)
+                cache_key = f"office_bg_zoomed_{zoomed_width}_{zoomed_height}"
+                
+                if cache_key not in self._overlay_surfaces:
+                    scaled = pygame.transform.scale(office_img, (zoomed_width, zoomed_height))
+                    self._overlay_surfaces[cache_key] = scaled
+                
+                # Apply camera offset (panning)
+                self.screen.blit(self._overlay_surfaces[cache_key], 
+                                (self.office_camera_offset_x, self.office_camera_offset_y))
+            else:
+                # When cameras are open, show static office view
+                cache_key = f"office_bg_{self.game_state.width}_{self.game_state.height}"
+                if cache_key not in self._overlay_surfaces:
+                    scaled = pygame.transform.scale(office_img, (self.game_state.width, self.game_state.height))
+                    self._overlay_surfaces[cache_key] = scaled
+                
+                self.screen.blit(self._overlay_surfaces[cache_key], (0, 0))
         else:
             self.screen.fill((12, 12, 12))
 
@@ -2803,10 +2879,16 @@ class Game:
             scale = 0.4 * (self.game_state.width / 1280) * (1 + wobble) * anim.size_multiplier
             scaled = pygame.transform.scale(sprite, 
                 (int(sprite.get_width() * scale), int(sprite.get_height() * scale)))
-            rect = scaled.get_rect(center=(anim.x, anim.y + wobble * 40))
+            # Apply camera offset to animatronic position
+            anim_x = anim.x + self.office_camera_offset_x
+            anim_y = anim.y + self.office_camera_offset_y + wobble * 40
+            rect = scaled.get_rect(center=(anim_x, anim_y))
             self.screen.blit(scaled, rect)
         else:
-            pygame.draw.circle(self.screen, (255, 0, 0), (int(anim.x), int(anim.y)), 25)
+            # Apply camera offset to debug circle as well
+            pygame.draw.circle(self.screen, (255, 0, 0), 
+                             (int(anim.x + self.office_camera_offset_x), 
+                              int(anim.y + self.office_camera_offset_y)), 25)
 
     def draw_office_overlays(self):
         """Draw door and light overlays (optimized with caching)"""

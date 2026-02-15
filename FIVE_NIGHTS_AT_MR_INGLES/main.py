@@ -1855,11 +1855,10 @@ class Game:
             return  # Skip panning if window dimensions are invalid
         
         # Calculate target camera offset based on mouse position
-        # Maximum offset is the difference between zoomed and normal size
-        # With 1.2x zoom, we have 0.2x extra space to pan
-        zoom_delta = self.office_zoom_factor - 1
-        max_offset_x = self.game_state.width * zoom_delta  # Keep as float for smooth lerp
-        max_offset_y = self.game_state.height * zoom_delta
+        # Maximum offset is the extra space available for panning (20% with 1.2x zoom)
+        zoom_margin = self.office_zoom_factor - 1
+        max_offset_x = self.game_state.width * zoom_margin  # Keep as float for smooth lerp
+        max_offset_y = self.game_state.height * zoom_margin
         
         target_offset_x = 0.0
         target_offset_y = 0.0
@@ -1874,9 +1873,9 @@ class Game:
             target_offset_x = -max_offset_x  # Maximum left pan
         else:
             # In center area - interpolate
-            denominator = center_x - self.office_pan_edge_threshold
-            if abs(denominator) > self.office_pan_epsilon:
-                center_distance = (mouse_x - center_x) / denominator
+            pan_range = center_x - self.office_pan_edge_threshold
+            if abs(pan_range) > self.office_pan_epsilon:
+                center_distance = (mouse_x - center_x) / pan_range
                 # Clamp center_distance to [-1, 1] to prevent extreme values
                 center_distance = max(-1.0, min(1.0, center_distance))
                 target_offset_x = -center_distance * max_offset_x
@@ -1893,9 +1892,9 @@ class Game:
             target_offset_y = -max_offset_y  # Maximum up pan
         else:
             # In center area - interpolate
-            denominator = center_y - self.office_pan_edge_threshold
-            if abs(denominator) > self.office_pan_epsilon:
-                center_distance = (mouse_y - center_y) / denominator
+            pan_range = center_y - self.office_pan_edge_threshold
+            if abs(pan_range) > self.office_pan_epsilon:
+                center_distance = (mouse_y - center_y) / pan_range
                 # Clamp center_distance to [-1, 1] to prevent extreme values
                 center_distance = max(-1.0, min(1.0, center_distance))
                 target_offset_y = -center_distance * max_offset_y

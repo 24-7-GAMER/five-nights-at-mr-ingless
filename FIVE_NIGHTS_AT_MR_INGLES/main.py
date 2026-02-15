@@ -232,90 +232,236 @@ class Jumpscare:
 # ROOM GRAPH AND NAVIGATION
 # =====================================================
 
-# Default room graph (will be replaced by procedural generation)
-ROOM_GRAPH = {
-    "Office": ["West Hall", "East Hall"],
-    "West Hall": ["Office", "Cafeteria", "Gym", "Supply Closet"],
-    "East Hall": ["Office", "Library", "Bathrooms", "Restrooms", "Kitchen"],
-    "Cafeteria": ["West Hall", "Dining Area", "Library", "Gym"],
-    "Dining Area": ["Cafeteria", "Stage", "Kitchen"],
-    "Stage": ["Dining Area", "Backstage"],
-    "Backstage": ["Stage", "Kitchen"],
-    "Kitchen": ["Dining Area", "Backstage", "East Hall"],
-    "Gym": ["West Hall", "Cafeteria"],
-    "Library": ["Cafeteria", "East Hall", "Bathrooms"],
-    "Bathrooms": ["Library", "East Hall", "Vent"],
-    "Vent": ["Bathrooms", "Restrooms"],
-    "Supply Closet": ["West Hall"],
-    "Restrooms": ["East Hall", "Vent"],
-}
+# Room name pool for procedural generation
+ROOM_NAME_POOL = [
+    "Cafeteria", "Dining Area", "Stage", "Backstage", "Kitchen",
+    "Gym", "Library", "Bathrooms", "Restrooms", "Vent",
+    "Supply Closet", "Storage", "Hallway A", "Hallway B", "Hallway C",
+    "Classroom 1", "Classroom 2", "Science Lab", "Computer Lab", "Art Room",
+    "Main Hall", "Server Room", "Janitor Closet", "Locker Room", "Auditorium"
+]
+
+# Global room graph (dynamically generated)
+ROOM_GRAPH = {}
 
 # Dynamic room positions (updated by generate_map)
 ROOM_POSITIONS = {}
 
 
 def generate_map(seed=None):
-    """Generate randomized room positions using the fixed room graph layout.
+    """Generate a completely new random room graph and positions.
     
-    Modifies the global ROOM_POSITIONS to contain new positions for all rooms
-    based on the seed. Returns the fixed ROOM_GRAPH structure.
+    Creates a procedurally generated map with:
+    - 10-15 unique rooms
+    - Office always has exactly 2 connections: West Hall (left) and East Hall (right)
+    - All rooms are reachable from Office
+    - Connections are bidirectional
+    - Reduced line crossings through smart layout
     
     Args:
-        seed: Random seed for position generation (affects positions only, not graph structure)
+        seed: Random seed for generation
     
     Returns:
-        The fixed ROOM_GRAPH dictionary
+        The generated ROOM_GRAPH dictionary
     """
-    global ROOM_POSITIONS
+    global ROOM_GRAPH, ROOM_POSITIONS
     
     if seed is not None:
         rng = random.Random(seed)
     else:
         rng = random.Random()
     
-    # Use the fixed room graph defined at the top of the file
-    # No need to regenerate it - just randomize positions
-    rooms = list(ROOM_GRAPH.keys())
+    # Decide number of rooms (10-15 total, including Office and halls)
+    num_rooms = rng.randint(10, 15)
     
-    # Generate positions for minimap using force-directed layout with randomization
-    generate_room_positions(rooms, ROOM_GRAPH, rng)
+    # Core rooms that must exist
+    core_rooms = ["Office", "West Hall", "East Hall"]
+    
+    # Select additional rooms from pool
+    available_names = [name for name in ROOM_NAME_POOL]
+    rng.shuffle(available_names)
+    additional_rooms = available_names[:num_rooms - 3]
+    
+    all_rooms = core_rooms + additional_rooms
+    
+    # Initialize empty graph
+    ROOM_GRAPH = {room: [] for room in all_rooms}
+    
+    # Office ALWAYS connects to West Hall and East Hall (and ONLY these)
+    ROOM_GRAPH["Office"] = ["West Hall", "East Hall"]
+    ROOM_GRAPH["West Hall"].append("Office")
+    ROOM_GRAPH["East Hall"].append("Office")
+    
+    # Split remaining rooms into left and right sections
+    remaining_rooms = additional_rooms[:]
+    rng.shuffle(remaining_rooms)
+    
+    mid_point = len(remaining_rooms) // 2
+    left_section = remaining_rooms[:mid_point]
+    right_section = remaining_rooms[mid_point:]
+    
+    # Connect West Hall to left section rooms (2-4 connections)
+    num_west_connections = min(len(left_section), rng.randint(2, 4))
+    west_connected = rng.sample(left_section, num_west_connections) if left_section else []
+    for room in west_connected:
+        add_bidirectional_connection(ROOM_GRAPH, "West Hall", room)
+    
+    # Connect East Hall to right section rooms (2-4 connections)
+    num_east_connections = min(len(right_section), rng.randint(2, 4))
+    east_connected = rng.sample(right_section, num_east_connections) if right_section else []
+    for room in east_connected:
+        add_bidirectional_connection(ROOM_GRAPH, "East Hall", room)
+    
+    # Create connections within left section
+    create_section_connections(ROOM_GRAPH, left_section, rng)
+    
+    # Create connections within right section
+    create_section_connections(ROOM_GRAPH, right_section, rng)
+    
+    # Add some cross-section connections (1-2) to make map more interesting
+    if left_section and right_section:
+        num_cross = min(2, min(len(left_section), len(right_section)))
+        for _ in range(num_cross):
+            left_room = rng.choice(left_section)
+            right_room = rng.choice(right_section)
+            # Only connect if not too many connections already
+            if len(ROOM_GRAPH[left_room]) < 4 and len(ROOM_GRAPH[right_room]) < 4:
+                add_bidirectional_connection(ROOM_GRAPH, left_room, right_room)
+    
+    # Ensure all rooms are reachable
+    ensure_connectivity(ROOM_GRAPH, all_rooms, rng)
+    
+    # Generate positions for minimap with improved layout
+    generate_room_positions(all_rooms, ROOM_GRAPH, rng)
     
     return ROOM_GRAPH
 
 
+def add_bidirectional_connection(graph, room1, room2):
+    """Add a bidirectional connection between two rooms"""
+    if room2 not in graph[room1]:
+        graph[room1].append(room2)
+    if room1 not in graph[room2]:
+        graph[room2].append(room1)
+
+
+def create_section_connections(graph, rooms, rng):
+    """Create connections within a section of rooms"""
+    if len(rooms) < 2:
+        return
+    
+    # Create a connected path through the section
+    for i in range(len(rooms) - 1):
+        # Connect consecutive rooms
+        add_bidirectional_connection(graph, rooms[i], rooms[i + 1])
+    
+    # Add some additional connections (20-40% chance per pair)
+    for i in range(len(rooms)):
+        for j in range(i + 2, len(rooms)):
+            # Skip if already connected or too many connections
+            if rooms[j] in graph[rooms[i]]:
+                continue
+            if len(graph[rooms[i]]) >= 4 or len(graph[rooms[j]]) >= 4:
+                continue
+            
+            # Random chance to connect
+            if rng.random() < 0.3:
+                add_bidirectional_connection(graph, rooms[i], rooms[j])
+
+
+def ensure_connectivity(graph, all_rooms, rng):
+    """Ensure all rooms are reachable from Office using BFS"""
+    # Find all reachable rooms from Office
+    visited = set()
+    queue = ["Office"]
+    visited.add("Office")
+    
+    while queue:
+        current = queue.pop(0)
+        for neighbor in graph[current]:
+            if neighbor not in visited:
+                visited.add(neighbor)
+                queue.append(neighbor)
+    
+    # Find unreachable rooms
+    unreachable = [room for room in all_rooms if room not in visited]
+    
+    # Connect unreachable rooms
+    for room in unreachable:
+        # Find a reachable room to connect to (prefer rooms with fewer connections)
+        candidates = [r for r in visited if len(graph[r]) < 4]
+        if not candidates:
+            candidates = list(visited)
+        
+        target = rng.choice(candidates)
+        add_bidirectional_connection(graph, room, target)
+        visited.add(room)
+
+
 def generate_room_positions(rooms, graph, rng):
-    """Generate 2D positions for rooms using a simple force-directed algorithm with randomization"""
+    """Generate 2D positions for rooms using an improved layout algorithm that reduces line crossings"""
     global ROOM_POSITIONS
     
-    # Initialize positions randomly with more variation
+    # Determine which rooms connect to which hall (for better initial placement)
+    west_side_rooms = set()
+    east_side_rooms = set()
+    
+    def categorize_rooms(room, visited, side):
+        """Recursively categorize rooms by which hall they're closest to"""
+        if room in visited or room == "Office":
+            return
+        visited.add(room)
+        side.add(room)
+        for neighbor in graph.get(room, []):
+            if neighbor not in visited and neighbor not in ["Office", "West Hall", "East Hall"]:
+                categorize_rooms(neighbor, visited, side)
+    
+    # Categorize rooms from West Hall
+    visited = set()
+    for room in graph.get("West Hall", []):
+        if room not in ["Office", "East Hall"]:
+            categorize_rooms(room, visited, west_side_rooms)
+    
+    # Categorize rooms from East Hall
+    for room in graph.get("East Hall", []):
+        if room not in ["Office", "West Hall"]:
+            categorize_rooms(room, visited, east_side_rooms)
+    
+    # Initialize positions with better spatial distribution
     positions = {}
     for i, room in enumerate(rooms):
         if room == "Office":
-            # Office at bottom center (with slight variation)
-            positions[room] = [0.5 + rng.uniform(-0.05, 0.05), 0.85 + rng.uniform(-0.02, 0.02)]
+            # Office at bottom center
+            positions[room] = [0.5, 0.85]
         elif room == "West Hall":
-            # West Hall to the left of Office (with variation)
-            positions[room] = [0.3 + rng.uniform(-0.1, 0.1), 0.85 + rng.uniform(-0.02, 0.02)]
+            # West Hall to the left of Office
+            positions[room] = [0.25 + rng.uniform(-0.05, 0.05), 0.85 + rng.uniform(-0.02, 0.02)]
         elif room == "East Hall":
-            # East Hall to the right of Office (with variation)
-            positions[room] = [0.7 + rng.uniform(-0.1, 0.1), 0.85 + rng.uniform(-0.02, 0.02)]
+            # East Hall to the right of Office
+            positions[room] = [0.75 + rng.uniform(-0.05, 0.05), 0.85 + rng.uniform(-0.02, 0.02)]
+        elif room in west_side_rooms:
+            # Position on left side (west)
+            positions[room] = [rng.uniform(0.1, 0.4), rng.uniform(0.15, 0.75)]
+        elif room in east_side_rooms:
+            # Position on right side (east)
+            positions[room] = [rng.uniform(0.6, 0.9), rng.uniform(0.15, 0.75)]
         else:
-            # Random position for other rooms (more spread out)
-            positions[room] = [rng.uniform(0.1, 0.9), rng.uniform(0.1, 0.7)]
+            # Middle area for any uncategorized rooms
+            positions[room] = [rng.uniform(0.35, 0.65), rng.uniform(0.2, 0.7)]
     
     # Force-directed layout iterations for better layout quality
-    for iteration in range(100):
+    for iteration in range(150):
         forces = {room: [0, 0] for room in rooms}
         
-        # Repulsion between all nodes
+        # Repulsion between all nodes (prevents overlap)
         for i, room1 in enumerate(rooms):
             for room2 in rooms[i+1:]:
                 dx = positions[room2][0] - positions[room1][0]
                 dy = positions[room2][1] - positions[room1][1]
                 dist = max(0.01, math.sqrt(dx*dx + dy*dy))
                 
-                # Repulsive force
-                force = 0.01 / (dist * dist)
+                # Stronger repulsive force for closer nodes
+                force = 0.015 / (dist * dist)
                 fx = (dx / dist) * force
                 fy = (dy / dist) * force
                 
@@ -324,7 +470,7 @@ def generate_room_positions(rooms, graph, rng):
                 forces[room2][0] += fx
                 forces[room2][1] += fy
         
-        # Attraction between connected nodes
+        # Attraction between connected nodes (keeps graph connected)
         for room1, neighbors in graph.items():
             for room2 in neighbors:
                 if room2 in positions:
@@ -332,22 +478,33 @@ def generate_room_positions(rooms, graph, rng):
                     dy = positions[room2][1] - positions[room1][1]
                     dist = max(0.01, math.sqrt(dx*dx + dy*dy))
                     
-                    # Attractive force (spring)
-                    force = dist * 0.05
+                    # Attractive force (spring) - stronger for shorter distances
+                    force = dist * 0.06
                     fx = (dx / dist) * force
                     fy = (dy / dist) * force
                     
                     forces[room1][0] += fx
                     forces[room1][1] += fy
         
-        # Apply forces (keep hallways more constrained, but allow some movement)
+        # Horizontal bias to keep left/right separation
+        for room in rooms:
+            if room in west_side_rooms:
+                # Push west rooms leftward
+                if positions[room][0] > 0.45:
+                    forces[room][0] -= 0.02
+            elif room in east_side_rooms:
+                # Push east rooms rightward
+                if positions[room][0] < 0.55:
+                    forces[room][0] += 0.02
+        
+        # Apply forces with damping
         for room in rooms:
             if room == "Office":
-                # Office stays mostly fixed but can move a tiny bit
-                positions[room][0] += forces[room][0] * 0.1
-                positions[room][1] += forces[room][1] * 0.1
+                # Office stays fixed at bottom center
+                positions[room][0] = 0.5
+                positions[room][1] = 0.85
             elif room in ["West Hall", "East Hall"]:
-                # Halls can move more but still constrained
+                # Halls can move slightly but stay near office
                 positions[room][0] += forces[room][0] * 0.3
                 positions[room][1] += forces[room][1] * 0.3
             else:

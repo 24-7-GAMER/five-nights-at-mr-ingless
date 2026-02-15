@@ -1867,9 +1867,8 @@ class Game:
         else:
             # In center area - interpolate
             denominator = self.game_state.width / 2 - self.office_pan_edge_threshold
-            # Threshold of 1 pixel is appropriate since we're working in pixel coordinates
-            # This ensures we have at least 1 pixel of panning range
-            if abs(denominator) > 1:
+            # Use small epsilon for division check to prevent discontinuity
+            if abs(denominator) > 0.01:
                 center_distance = (mouse_x - self.game_state.width / 2) / denominator
                 # Clamp center_distance to [-1, 1] to prevent extreme values
                 center_distance = max(-1.0, min(1.0, center_distance))
@@ -1887,9 +1886,8 @@ class Game:
         else:
             # In center area - interpolate
             denominator = self.game_state.height / 2 - self.office_pan_edge_threshold
-            # Threshold of 1 pixel is appropriate since we're working in pixel coordinates
-            # This ensures we have at least 1 pixel of panning range
-            if abs(denominator) > 1:
+            # Use small epsilon for division check to prevent discontinuity
+            if abs(denominator) > 0.01:
                 center_distance = (mouse_y - self.game_state.height / 2) / denominator
                 # Clamp center_distance to [-1, 1] to prevent extreme values
                 center_distance = max(-1.0, min(1.0, center_distance))
@@ -1899,7 +1897,8 @@ class Game:
         
         # Smoothly interpolate to target position (frame-rate independent lerp)
         # Calculate lerp factor that works consistently across different frame rates
-        lerp_factor = 1 - pow(1 - self.office_pan_speed, dt * 60)
+        # Clamp to 1.0 to prevent overshoot in case of large dt values
+        lerp_factor = min(1.0, 1 - pow(1 - self.office_pan_speed, dt * 60))
         self.office_camera_offset_x += (target_offset_x - self.office_camera_offset_x) * lerp_factor
         self.office_camera_offset_y += (target_offset_y - self.office_camera_offset_y) * lerp_factor
 

@@ -257,7 +257,7 @@ def generate_map(seed=None):
     - Procedurally generated connections
     - Random office position (not always bottom center)
     - Guaranteed connectivity via BFS validation
-    - Variable office connections (2-3 adjacent rooms)
+    - Variable office connections (at least 2, up to 5 adjacent rooms)
     
     Args:
         seed: Random seed for generation
@@ -323,7 +323,10 @@ def generate_connected_graph(rooms, rng):
         not_in_tree.remove(to_room)
     
     # Add extra connections for complexity (25-40% more edges)
-    num_extra_edges = rng.randint(len(rooms) // 4, len(rooms) * 2 // 5)
+    min_extra = len(rooms) // 4
+    max_extra = (len(rooms) * 2) // 5
+    # Ensure min is not greater than max (handle edge cases)
+    num_extra_edges = rng.randint(min(min_extra, max_extra), max(min_extra, max_extra))
     
     for _ in range(num_extra_edges):
         room1 = rng.choice(rooms)
@@ -342,11 +345,6 @@ def generate_connected_graph(rooms, rng):
         if candidate not in graph["Office"] and len(graph[candidate]) < 5:
             graph["Office"].append(candidate)
             graph[candidate].append("Office")
-    
-    # Validate connectivity
-    if not is_graph_connected(graph, rooms):
-        # Fallback: regenerate if somehow disconnected
-        return generate_connected_graph(rooms, rng)
     
     return graph
 
@@ -394,14 +392,16 @@ def generate_room_positions(rooms, graph, rng):
     office_neighbors = graph.get("Office", [])
     
     # Position office neighbors in a circle around office initially
-    for i, neighbor in enumerate(office_neighbors):
-        angle = (i / len(office_neighbors)) * 2 * math.pi
-        offset_x = math.cos(angle) * 0.15
-        offset_y = math.sin(angle) * 0.15
-        positions[neighbor] = [
-            min(0.9, max(0.1, positions["Office"][0] + offset_x)),
-            min(0.75, max(0.1, positions["Office"][1] + offset_y))
-        ]
+    # Guard against empty neighbor list
+    if office_neighbors:
+        for i, neighbor in enumerate(office_neighbors):
+            angle = (i / len(office_neighbors)) * 2 * math.pi
+            offset_x = math.cos(angle) * 0.15
+            offset_y = math.sin(angle) * 0.15
+            positions[neighbor] = [
+                min(0.9, max(0.1, positions["Office"][0] + offset_x)),
+                min(0.75, max(0.1, positions["Office"][1] + offset_y))
+            ]
     
     # Force-directed layout iterations for neat positioning
     for iteration in range(250):
@@ -1506,9 +1506,9 @@ class Game:
         
         # Get available rooms for animatronic starting positions
         # Exclude Office and its immediate neighbors from starting positions
-        office_neighbors = get_neighbors("Office")
+        office_neighbors_set = set(get_neighbors("Office"))
         available_rooms = [room for room in ROOM_GRAPH.keys() 
-                          if room != "Office" and room not in office_neighbors]
+                          if room != "Office" and room not in office_neighbors_set]
         
         # Ensure we have enough rooms
         if len(available_rooms) < 4:
@@ -1544,10 +1544,12 @@ class Game:
                 current = next_room
             
             # Add office-adjacent rooms to make them approach the office
-            office_adjacent = get_neighbors("Office")
+            office_adjacent = set(get_neighbors("Office"))
+            route_set = set(route)
             for adj_room in office_adjacent:
-                if adj_room not in route and self.rng.random() < 0.6:
+                if adj_room not in route_set and self.rng.random() < 0.6:
                     route.append(adj_room)
+                    route_set.add(adj_room)
             
             return route
 
@@ -1850,8 +1852,8 @@ class Game:
         if self.power.outage:
             stress_level += 0.5
         # Check if any animatronics are adjacent to office
-        office_neighbors = get_neighbors("Office")
-        if any(a.room in office_neighbors for a in self.animatronics):
+        office_neighbors_set = set(get_neighbors("Office"))
+        if any(a.room in office_neighbors_set for a in self.animatronics):
             stress_level += 0.2
         
         self.game_state.chromatic_aberration = stress_level

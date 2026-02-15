@@ -1866,8 +1866,14 @@ class Game:
             target_offset_x = -max_offset_x  # Maximum left pan
         else:
             # In center area - interpolate
-            center_distance = (mouse_x - self.game_state.width / 2) / (self.game_state.width / 2 - self.office_pan_edge_threshold)
-            target_offset_x = -int(center_distance * max_offset_x)
+            denominator = self.game_state.width / 2 - self.office_pan_edge_threshold
+            if abs(denominator) > 1:  # Prevent division by zero
+                center_distance = (mouse_x - self.game_state.width / 2) / denominator
+                # Clamp center_distance to [-1, 1] to prevent extreme values
+                center_distance = max(-1.0, min(1.0, center_distance))
+                target_offset_x = -int(center_distance * max_offset_x)
+            else:
+                target_offset_x = 0
         
         # Vertical panning (subtle, FNAF doesn't pan much vertically)
         if mouse_y < self.office_pan_edge_threshold:
@@ -1878,8 +1884,14 @@ class Game:
             target_offset_y = -max_offset_y  # Maximum up pan
         else:
             # In center area - interpolate
-            center_distance = (mouse_y - self.game_state.height / 2) / (self.game_state.height / 2 - self.office_pan_edge_threshold)
-            target_offset_y = -int(center_distance * max_offset_y)
+            denominator = self.game_state.height / 2 - self.office_pan_edge_threshold
+            if abs(denominator) > 1:  # Prevent division by zero
+                center_distance = (mouse_y - self.game_state.height / 2) / denominator
+                # Clamp center_distance to [-1, 1] to prevent extreme values
+                center_distance = max(-1.0, min(1.0, center_distance))
+                target_offset_y = -int(center_distance * max_offset_y)
+            else:
+                target_offset_y = 0
         
         # Smoothly interpolate to target position (lerp)
         self.office_camera_offset_x += (target_offset_x - self.office_camera_offset_x) * self.office_pan_speed

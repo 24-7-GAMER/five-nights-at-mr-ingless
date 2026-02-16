@@ -245,22 +245,22 @@ ROOM_GRAPH = {
     "Restrooms": ["East Hall", "Vent"]
 }
 
-# Static room positions for minimap (x, y as percentages)
+# Static room positions for minimap (x, y as percentages) - SPACED OUT
 ROOM_POSITIONS = {
-    "Office": [0.5, 0.8],
-    "West Hall": [0.3, 0.65],
-    "East Hall": [0.7, 0.65],
-    "Stage": [0.5, 0.15],
-    "Dining Area": [0.35, 0.3],
-    "Backstage": [0.65, 0.3],
-    "Kitchen": [0.5, 0.4],
-    "Cafeteria": [0.2, 0.45],
-    "Gym": [0.8, 0.5],
-    "Library": [0.15, 0.6],
-    "Bathrooms": [0.85, 0.65],
-    "Vent": [0.75, 0.75],
-    "Supply Closet": [0.25, 0.75],
-    "Restrooms": [0.75, 0.55]
+    "Office": [0.5, 0.85],           # Bottom center
+    "West Hall": [0.25, 0.65],       # Mid-left, closer to office
+    "East Hall": [0.75, 0.65],       # Mid-right, closer to office
+    "Stage": [0.5, 0.1],             # Top center
+    "Dining Area": [0.3, 0.25],      # Upper-left quadrant
+    "Backstage": [0.7, 0.25],        # Upper-right quadrant
+    "Kitchen": [0.5, 0.35],          # Upper-middle
+    "Cafeteria": [0.12, 0.45],       # Far left
+    "Gym": [0.88, 0.45],             # Far right
+    "Library": [0.12, 0.65],         # Left side
+    "Bathrooms": [0.88, 0.65],       # Right side
+    "Vent": [0.82, 0.78],            # Lower-right
+    "Supply Closet": [0.18, 0.78],   # Lower-left
+    "Restrooms": [0.68, 0.52]        # Mid-right area
 }
 
 

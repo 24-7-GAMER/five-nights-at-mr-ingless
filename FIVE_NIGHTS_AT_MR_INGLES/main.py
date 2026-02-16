@@ -325,6 +325,8 @@ class Animatronic:
         self.hunting_mode = False
         self.hunting_timer = 0.0
         self.hunt_target_room = None
+        self.investigating = False  # Track if reached investigation target
+        self.investigation_timer = 0.0  # Time spent investigating
         self.adaptive_aggro = base_aggro  # adjusts based on learning
         self.last_blocked_time = 0
         self.block_count = 0
@@ -401,6 +403,30 @@ class Animatronic:
         if self.retreat_timer > 0:
             self.retreat_timer = max(0.0, self.retreat_timer - dt)
             return
+        
+        # Handle investigation behavior (for noisemakers)
+        if self.investigating:
+            self.investigation_timer += dt
+            # Investigate for 2-4 seconds, then leave and return to patrol
+            investigation_duration = 2.0 + (self.curiosity * 1.5)  # 2-4 seconds based on curiosity
+            if self.investigation_timer >= investigation_duration:
+                self.investigating = False
+                self.investigation_timer = 0.0
+                self.hunting_mode = False
+                self.hunting_timer = 0.0
+                self.hunt_target_room = None
+                if self.mood == "hunting":
+                    self.mood = "neutral"
+                # Resume patrol - find nearest patrol point
+                min_dist = 999
+                best_idx = 0
+                for i, patrol_room in enumerate(self.patrol_route):
+                    dist = self._distance_to_room(self.room, patrol_room)
+                    if dist < min_dist:
+                        min_dist = dist
+                        best_idx = i
+                self.patrol_index = best_idx
+            return  # Don't move while investigating
 
         if self.hunting_timer > 0:
             self.hunting_timer -= dt
@@ -524,30 +550,41 @@ class Animatronic:
         return None
     
     def update_mood(self, game_state=None):
-        """Update mood based on situation (deterministic)"""
+        """Update mood based on situation (deterministic) - patrol-focused behavior"""
         minutes = game_state.minutes_elapsed if game_state else 0
         night = game_state.night if game_state else 1
+        
         if self.hunting_mode:
             self.mood = "hunting"
-        elif self.block_count >= 3:  # If frustrated enough, go hunting
-            self.mood = "hunting"
-        elif self.block_count >= 4 or minutes >= 180 or night >= 2:
+        elif self.block_count >= 5:  # Very frustrated - aggressive hunting
             self.mood = "aggressive"
-        elif self.block_count >= 2 or minutes >= 60:
+        elif self.block_count >= 3:  # Frustrated - hunt sometimes
+            # 40% chance to hunt, 60% stay in patrol mode
+            self.mood = "hunting" if (minutes + self.block_count) % 5 < 2 else "neutral"
+        elif minutes >= 240 or night >= 4:  # Late game or high night - more aggressive
+            self.mood = "aggressive" if minutes % 4 < 2 else "cautious"
+        elif minutes >= 120 or night >= 3:  # Mid-late game - cautiously patrol
             self.mood = "cautious"
+        elif minutes >= 60 or night >= 2:  # Early-mid game - neutral patrol
+            self.mood = "neutral" if minutes % 3 < 2 else "cautious"
         else:
-            self.mood = "hunting"  # Always lean toward hunting/office-seeking
+            # Early game - mostly neutral patrol with very occasional hunting
+            if minutes < 30:
+                self.mood = "neutral"  # Peaceful patrol in first 30 minutes
+            else:
+                # After 30 minutes, 20% chance to hunt, 80% patrol
+                self.mood = "hunting" if minutes % 10 < 2 else "neutral"
 
     def get_mood_multiplier(self):
         """Get aggression multiplier based on mood"""
         mood_map = {
-            "neutral": 1.0,
-            "cautious": 0.7,
-            "aggressive": 1.4,
-            "hunting": 1.6,
-            "retreating": 0.5
+            "neutral": 0.9,      # Slower, calm patrol
+            "cautious": 0.7,     # Very slow, careful
+            "aggressive": 1.3,   # Faster movement
+            "hunting": 1.5,      # Actively seeking player (reduced from 1.6)
+            "retreating": 0.4    # Very slow, backing off
         }
-        return mood_map.get(self.mood, 1.0)
+        return mood_map.get(self.mood, 0.9)
 
     def move_patrol(self):
         """Move along a fixed patrol route"""
@@ -563,6 +600,10 @@ class Animatronic:
     def move_toward_target(self, target_room):
         """Move toward a specific target room"""
         if not target_room or target_room == self.room:
+            # Reached target - if it's not Office, start investigating (noisemaker)
+            if target_room and target_room != "Office" and self.hunt_target_room == target_room:
+                self.investigating = True
+                self.investigation_timer = 0.0
             return
         
         neighbors = get_neighbors(self.room)
@@ -628,12 +669,26 @@ class Animatronic:
         return None
 
     def handle_blocked(self, side):
-        """Handle being blocked - learning and mood change"""
+        """Handle being blocked - learning and mood change (more gradual)"""
         self.block_count += 1
         self.last_blocked_time = time.time()
-        self.hunting_timer = 12.0
-        self.hunt_target_room = "Office"
-        self.mood = "aggressive"
+        
+        # Only become aggressive after multiple blocks
+        if self.block_count >= 3:
+            # Very frustrated - hunt for longer
+            self.hunting_timer = 15.0
+            self.hunt_target_room = "Office"
+            self.mood = "aggressive"
+        elif self.block_count >= 2:
+            # Getting frustrated - short hunt
+            self.hunting_timer = 8.0
+            self.hunt_target_room = "Office"
+            self.mood = "cautious"
+        else:
+            # First block - just retreat, stay in patrol mode
+            self.hunting_timer = 0.0  # Don't hunt on first block
+            self.mood = "cautious"  # Just be cautious
+        
         # MUST leave the office - find a neighboring room and move there immediately
         if self.room == "Office":
             neighbors = get_neighbors(self.room)
@@ -761,27 +816,40 @@ class AssetManager:
         # Sounds
         self.load_sound("door_close", "assets/sfx/door_close.ogg")
         self.load_sound("door_open", "assets/sfx/door_open.ogg")
+        self.load_sound("door_knock", "assets/sfx/door_knock.mp3")
+        self.load_sound("door_damage", "assets/sfx/door_damage.mp3")
         self.load_sound("light_toggle", "assets/sfx/light_toggle.ogg")
         self.load_sound("jumpscare", "assets/sfx/jumpscare.ogg")
         self.load_sound("faaah", "assets/sfx/faaah.mp3")
         self.load_sound("nice_try", "assets/sfx/NICE_TRY.mp3")
         self.load_sound("intro_msg", "assets/sfx/intro_msg.mp3")
         self.load_sound("bell_6am", "assets/sfx/bell_6am.ogg")
+        self.load_sound("hour_chime", "assets/sfx/hour_chime.mp3")
         self.load_sound("static_loop", "assets/sfx/static_loop.ogg")
+        self.load_sound("camera_flash", "assets/sfx/camera_flash.mp3")
+        self.load_sound("power_out", "assets/sfx/power_out.mp3")
+        self.load_sound("vent_crawl", "assets/sfx/vent_crawl.mp3")
 
         # Music/Ambience
         self.load_music("ambience", "assets/music/ambience.mp3")
         self.load_music("menu_theme", "assets/music/menu_theme.ogg")
 
-    def play_sound(self, name):
-        """Play a sound effect"""
+    def play_sound(self, name, loops=0):
+        """Play a sound effect (loops: 0=once, -1=forever)"""
         if pygame.mixer.get_init() is None:
             return
         if self.sfx_muted:
             return
         if name in self.sounds:
             self.sounds[name].stop()
-            self.sounds[name].play()
+            self.sounds[name].play(loops=loops)
+    
+    def stop_sound(self, name):
+        """Stop a specific sound effect"""
+        if pygame.mixer.get_init() is None:
+            return
+        if name in self.sounds:
+            self.sounds[name].stop()
 
     def play_music(self, name, loops=-1):
         """Play music (streaming)"""
@@ -952,6 +1020,16 @@ class Game:
         self.combo_blocks = 0  # Consecutive perfect blocks
         self.combo_timer = 0
         
+        # Camera static sound system
+        self.static_loop_playing = False  # Track if static_loop is currently playing
+        self.random_static_timer = 0.0  # Timer for random static playback
+        self.next_random_static_time = self.rng.uniform(20, 40)  # Next random static event (seconds)
+        
+        # Random ambient sound system (for suspense)
+        self.ambient_sound_timer = 0.0
+        self.next_ambient_sound_time = self.rng.uniform(12, 18)  # ~15 second intervals (12-18 seconds)
+        self.ambient_sounds = ["door_knock", "vent_crawl", "faaah", "hour_chime"]  # Sounds to play randomly
+        
         # Noise maker menu state
         self.noise_maker_menu_active = False
         self.noise_maker_rooms = ["Cafeteria", "Gym", "Library", "Bathrooms", "Dining Area", "Kitchen", "Vent"]
@@ -965,6 +1043,10 @@ class Game:
         self.anti_cheat_active = False
         self.anti_cheat_timer = 0.0
         self.anti_cheat_pending = False
+        
+        # Door spam prevention
+        self.door_toggle_history = {"left": [], "right": []}  # Track recent toggles
+        self.door_spam_penalty = 0.0  # Accumulated penalty for spamming
         
         # Minimap data
         self.minimap_room_positions = {}
@@ -987,12 +1069,20 @@ class Game:
         self.last_reset_request = 0.0
         self.fps_cap_enabled = True
 
-        # Intro sequence (Night 1)
+        # Intro sequence (Night 1) - only show once per game session
         self.intro_messages = []
         self.intro_index = 0
         self.intro_timer = 0.0
         self.intro_message_duration = 1.5  # seconds per message (incl fade in/out)
         self.intro_message_durations = []
+        self.intro_seen = False  # Track if intro has been shown this session
+        
+        # Fade transitions between screens
+        self.fade_alpha = 0  # 0 = fully visible, 255 = fully black
+        self.fade_state = None  # None, "fade_out", "fade_in"
+        self.fade_timer = 0.0
+        self.fade_duration = 0.8  # seconds for fade transition
+        self.fade_callback = None  # Function to call after fade out completes
 
         # Splash screen (on boot)
         self.splash_timer = 0.0
@@ -1045,6 +1135,50 @@ class Game:
     def clamp(self, x, a, b):
         """Clamp value between a and b"""
         return max(a, min(x, b))
+    
+    def start_fade_out(self, callback=None):
+        """Start a fade to black transition"""
+        self.fade_state = "fade_out"
+        self.fade_timer = 0.0
+        self.fade_callback = callback
+    
+    def start_fade_in(self):
+        """Start a fade from black transition"""
+        self.fade_state = "fade_in"
+        self.fade_timer = 0.0
+        self.fade_alpha = 255  # Start black
+    
+    def update_fade(self, dt):
+        """Update fade transitions"""
+        if self.fade_state is None:
+            return
+        
+        self.fade_timer += dt
+        progress = min(1.0, self.fade_timer / self.fade_duration)
+        
+        if self.fade_state == "fade_out":
+            # Fade to black (alpha increases)
+            self.fade_alpha = int(255 * progress)
+            if progress >= 1.0:
+                self.fade_state = None
+                if self.fade_callback:
+                    self.fade_callback()
+                    self.fade_callback = None
+        
+        elif self.fade_state == "fade_in":
+            # Fade from black (alpha decreases)
+            self.fade_alpha = int(255 * (1.0 - progress))
+            if progress >= 1.0:
+                self.fade_state = None
+                self.fade_alpha = 0
+    
+    def draw_fade_overlay(self):
+        """Draw fade overlay (call at the end of draw)"""
+        if self.fade_alpha > 0:
+            fade_surf = pygame.Surface((self.game_state.width, self.game_state.height))
+            fade_surf.fill((0, 0, 0))
+            fade_surf.set_alpha(self.fade_alpha)
+            self.screen.blit(fade_surf, (0, 0))
     
     def scale_mouse_pos(self, pos):
         """Scale mouse position from window coordinates to game coordinates"""
@@ -1101,6 +1235,9 @@ class Game:
 
     def break_door(self, side):
         """Force a door to jam open when its health is depleted"""
+        # Play door damage/break sound
+        self.assets.play_sound("door_damage")
+        
         if side == "left":
             self.office.door_left_closed = False
             self.office.door_left_jam_timer = 4.5
@@ -1423,11 +1560,23 @@ class Game:
         self.anti_cheat_timer = 0.0
         self.anti_cheat_pending = False
         
+        # Reset camera static sound state
+        self.assets.stop_sound("static_loop")
+        self.static_loop_playing = False
+        self.random_static_timer = 0.0
+        self.next_random_static_time = self.rng.uniform(20, 40)
+        
+        # Reset ambient sound state
+        self.ambient_sound_timer = 0.0
+        self.next_ambient_sound_time = self.rng.uniform(12, 18)
+        
         # Apply adaptive difficulty based on previous performance
         self.apply_adaptive_difficulty()
 
-        # Intro sequence only for Night 1
-        if self.game_state.night == 1:
+        # Intro sequence only for Night 1 AND only if not seen before
+        if self.game_state.night == 1 and not self.intro_seen:
+            # Start with fade in
+            self.start_fade_in()
             self.game_state.state = "intro"
             self.intro_messages = [
                 "YOU'RE IN THE SCIENCE BLOCK.",
@@ -1438,6 +1587,7 @@ class Game:
             ]
             self.intro_index = 0
             self.intro_timer = 0.0
+            self.intro_seen = True  # Mark intro as seen
             # Play intro voice/message and sync timings
             intro_sound = self.assets.sounds.get("intro_msg")
             if intro_sound:
@@ -1455,13 +1605,18 @@ class Game:
                 self.intro_message_duration = 1.5
                 self.intro_message_durations = []
         else:
-            # Load and play night ambience
-            ambience_key = f"ambience_n{self.game_state.night}"
-            self.assets.play_music(ambience_key)
-            self.game_state.state = "playing"
-            self.game_state.start_time = time.time()
-            self.game_state.hour_timer = 0
-            self.game_state.minutes_elapsed = 0
+            # Fade out, then start playing
+            def start_playing_after_fade():
+                # Load and play night ambience
+                ambience_key = f"ambience_n{self.game_state.night}"
+                self.assets.play_music(ambience_key)
+                self.game_state.state = "playing"
+                self.game_state.start_time = time.time()
+                self.game_state.hour_timer = 0
+                self.game_state.minutes_elapsed = 0
+                self.start_fade_in()  # Fade back in
+            
+            self.start_fade_out(callback=start_playing_after_fade)
 
     def apply_adaptive_difficulty(self):
         """Adjust animatronic difficulty based on player performance"""
@@ -2077,6 +2232,9 @@ class Game:
         if self.power.current <= 0:
             self.power.current = 0
             if not self.power.outage:
+                # Play power outage sound
+                self.assets.play_sound("power_out")
+                
                 self.power.outage = True
                 self.power.emergency_mode = True
                 self.power.emergency_timer = 45  # 45 seconds of emergency power
@@ -2096,12 +2254,12 @@ class Game:
             if self.power.emergency_timer <= 0:
                 self.power.emergency_mode = False
                 self.set_status("BACKUP POWER DEPLETED")
-                # After emergency mode, animatronics get more aggressive
+                # After emergency mode, animatronics get slightly more aggressive (not full hunt)
                 for anim in self.animatronics:
-                    anim.mood = "hunting"
-                    anim.hunting_mode = True
-                    anim.hunting_timer = 30
-                    anim.adaptive_aggro += 0.3
+                    anim.mood = "aggressive"  # Changed from hunting
+                    anim.hunting_mode = False  # Don't force hunting
+                    anim.hunting_timer = 0  # No forced hunt timer
+                    anim.adaptive_aggro += 0.2  # Slight boost (was 0.3)
             return
 
         # Camera power drain (no heat mechanic - cameras just drain power when open)
@@ -2138,6 +2296,11 @@ class Game:
         self.power_usage["doors"] = drain_doors
         self.power_usage["lights"] = drain_lights
         self.power_usage["cams"] = drain_cams
+        
+        # Apply door spam penalty
+        if self.door_spam_penalty > 0:
+            drain += self.door_spam_penalty * dt
+            self.door_spam_penalty = max(0, self.door_spam_penalty - dt * 2.0)  # Decay 2 per second
 
         self.power.current -= drain * dt
         if self.power.current < 0:
@@ -2158,6 +2321,10 @@ class Game:
         while self.game_state.hour_timer >= seconds_per_minute:
             self.game_state.hour_timer -= seconds_per_minute
             self.game_state.minutes_elapsed += 1
+            
+            # Play hour chime when a new hour starts (every 60 minutes)
+            if self.game_state.minutes_elapsed % 60 == 0 and self.game_state.minutes_elapsed < 6 * 60:
+                self.assets.play_sound("hour_chime")
 
             # Win condition: reached 6 AM (6 hours after 12:00)
             if self.game_state.minutes_elapsed >= 6 * 60:
@@ -2268,7 +2435,10 @@ class Game:
                 anim.hallway_block_timer = 0.0
 
             # Check if animatronic was blocked by a door
-            anim.get_blocked_side(self.office)
+            blocked_side = anim.get_blocked_side(self.office)
+            if blocked_side:
+                # Play door knock sound when animatronic is blocked
+                self.assets.play_sound("door_knock")
             # Check if animatronic should attack (windup required)
             # But only if player isn't hiding!
             if anim.room == "Office" and anim.try_attack(self.office) and not self.current_safe_spot:
@@ -2304,12 +2474,14 @@ class Game:
             # Share intelligence: if one is hunting, spread the target
             target_room = hunters[0].hunt_target_room
             for anim in self.animatronics:
+                # Only 50% chance to join the coordination (not all will join)
                 if not anim.hunting_mode and anim.communication_cooldown <= 0:
-                    anim.hunting_mode = True
-                    anim.hunt_target_room = target_room
-                    anim.mood = "hunting"
-                    anim.hunting_timer = 10.0
-                    anim.communication_cooldown = 6.0
+                    if (anim.block_count + int(time.time())) % 2 == 0:  # 50% chance
+                        anim.hunting_mode = True
+                        anim.hunt_target_room = target_room
+                        anim.mood = "cautious"  # Changed from hunting
+                        anim.hunting_timer = 6.0  # Reduced from 10.0
+                        anim.communication_cooldown = 6.0
         
         # Predict player door preference and adapt strategy
         for anim in self.animatronics:
@@ -2468,15 +2640,16 @@ class Game:
             self.log_event("Unusual power drain detected")
         
         elif event == "animatronic_rush" and night >= 4:
-            # All animatronics become aggressive temporarily
-            for anim in self.animatronics:
-                anim.mood = "aggressive"
-                anim.hunting_mode = True
-                anim.hunting_timer = self.rng.uniform(15, 25)
-                anim.hunt_target_room = "Office"
-            self.add_screen_shake(6, 1.0)
-            self.add_color_overlay((255, 50, 50, 100), 2.0)
-            self.log_event("WARNING: Unusual activity detected!")
+            # SOME animatronics become more active temporarily (not all)
+            affected = self.rng.randint(1, 3)  # Only 1-3 animatronics affected
+            for i, anim in enumerate(self.animatronics):
+                if i < affected:
+                    anim.mood = "cautious"  # Make them cautious, not hunting
+                    anim.hunting_mode = False  # Don't force hunt mode
+                    anim.adaptive_aggro += 0.15  # Just slightly more aggressive
+            self.add_screen_shake(4, 0.8)
+            self.add_color_overlay((255, 100, 50, 80), 1.5)
+            self.log_event("Unusual activity detected...")
     
     def update_phantom_sounds(self, dt):
         """Update and clean up phantom sound events"""
@@ -2485,6 +2658,57 @@ class Game:
             sound for sound in self.game_state.phantom_sounds
             if current_time - sound['time'] < 5  # Remove after 5 seconds
         ]
+    
+    def update_random_static(self, dt):
+        """Play random static bursts at intervals"""
+        # Don't play random static if cameras are open (already looping)
+        if self.office.cams_open:
+            return
+        
+        # Update timer
+        self.random_static_timer += dt
+        
+        # Check if it's time for random static
+        if self.random_static_timer >= self.next_random_static_time:
+            # Check if static is already playing to avoid overlap
+            static_playing = False
+            if "static_loop" in self.assets.sounds:
+                if self.assets.sounds["static_loop"].get_num_channels() > 0:
+                    static_playing = True
+            
+            # Only play if not already playing
+            if not static_playing:
+                # Play a short burst of static (not looping)
+                self.assets.play_sound("static_loop")
+            
+            # Reset timer and schedule next event
+            self.random_static_timer = 0.0
+            self.next_random_static_time = self.rng.uniform(20, 40)  # Random 20-40 seconds
+    
+    def update_random_ambient_sounds(self, dt):
+        """Play random ambient sounds at medium intervals for suspense"""
+        # Update timer
+        self.ambient_sound_timer += dt
+        
+        # Check if it's time for a random ambient sound
+        if self.ambient_sound_timer >= self.next_ambient_sound_time:
+            # Check if any ambient sounds are currently playing to avoid overlap
+            any_playing = False
+            for sound_name in self.ambient_sounds:
+                if sound_name in self.assets.sounds:
+                    if self.assets.sounds[sound_name].get_num_channels() > 0:
+                        any_playing = True
+                        break
+            
+            # Only play if no ambient sounds are currently playing
+            if not any_playing:
+                # Pick a random ambient sound
+                sound_choice = self.rng.choice(self.ambient_sounds)
+                self.assets.play_sound(sound_choice)
+            
+            # Reset timer and schedule next event with ~15 second interval
+            self.ambient_sound_timer = 0.0
+            self.next_ambient_sound_time = self.rng.uniform(12, 18)  # Random 12-18 seconds (~15 average)
     
     def calculate_performance_score(self):
         """Calculate player performance score for the night"""
@@ -2601,6 +2825,10 @@ class Game:
     def update(self, dt):
         """Main update loop"""
         self.noise_phase += dt * 5.0
+        
+        # Update fade transitions (always active)
+        self.update_fade(dt)
+        
         if self.game_state.state == "splash":
             self.update_splash(dt)
             return
@@ -2646,6 +2874,8 @@ class Game:
             self.update_animatronics(dt)
             self.update_environmental_events(dt)
             self.update_phantom_sounds(dt)
+            self.update_random_static(dt)  # Random static playback
+            self.update_random_ambient_sounds(dt)  # Random ambient sounds for suspense
             self.update_screen_effects(dt)
             self.update_threat_assessment(dt)
             self.update_audio_system(dt)
@@ -2792,6 +3022,9 @@ class Game:
                 instruction = self.font_small.render("Click the checkbox to continue", True, (255, 200, 100))
                 instr_rect = instruction.get_rect(center=(self.game_state.width // 2, checkbox_y + 50))
                 self.screen.blit(instruction, instr_rect)
+        
+        # Draw fade overlay
+        self.draw_fade_overlay()
 
     def draw_intro(self):
         """Draw the fading intro messages"""
@@ -2840,6 +3073,9 @@ class Game:
         self.screen.blit(shadow, shadow_rect)
         text_surf.set_alpha(int(255 * alpha))
         self.screen.blit(text_surf, text_rect)
+        
+        # Draw fade overlay
+        self.draw_fade_overlay()
 
     def update_tutorial(self, dt):
         """Update tutorial slideshow"""
@@ -2960,6 +3196,9 @@ class Game:
         skip_text.set_alpha(int(180 * alpha_ratio))
         skip_rect = skip_text.get_rect(center=(self.game_state.width // 2, int(self.game_state.height * 0.93)))
         self.screen.blit(skip_text, skip_rect)
+        
+        # Draw fade overlay
+        self.draw_fade_overlay()
 
     # =====================================================
     # DRAWING FUNCTIONS
@@ -3520,6 +3759,9 @@ class Game:
         text_surf.set_alpha(alpha)
         rect = text_surf.get_rect(center=(self.game_state.width // 2, self.game_state.height // 2))
         self.screen.blit(text_surf, rect)
+        
+        # Draw fade overlay
+        self.draw_fade_overlay()
 
     def draw_anti_cheat_message(self):
         """Draw anti-cheat black screen message."""
@@ -3534,6 +3776,9 @@ class Game:
             text = self.font_medium.render(line, True, color)
             rect = text.get_rect(center=(self.game_state.width // 2, int(self.game_state.height * 0.40) + i * 50))
             self.screen.blit(text, rect)
+        
+        # Draw fade overlay
+        self.draw_fade_overlay()
 
     def draw_menu(self):
         """Draw main menu (optimized with caching)"""
@@ -3753,6 +3998,9 @@ class Game:
 
 # Subtle static for creepy vibe
         self.apply_creepy_static(0.15)
+        
+        # Draw fade overlay
+        self.draw_fade_overlay()
 
     def draw_jumpscare(self):
         """Draw jumpscare screen with enhanced effects"""
@@ -3873,6 +4121,9 @@ class Game:
         else:
             # During zoom-in, add intense chromatic aberration
             self.apply_chromatic_aberration(aberration_intensity)
+        
+        # Draw fade overlay
+        self.draw_fade_overlay()
 
     def draw_win(self):
         """Draw win screen with only performance score"""
@@ -3910,6 +4161,9 @@ class Game:
         bg_surface.fill((0, 0, 0))
         self.screen.blit(bg_surface, bg_rect)
         self.screen.blit(score_text, score_rect)
+        
+        # Draw fade overlay
+        self.draw_fade_overlay()
 
     def draw(self):
         """Main draw loop"""
@@ -4002,6 +4256,9 @@ class Game:
                             self.rng.uniform(-2, 2), self.rng.uniform(-3, -1),
                             (255, 200, 0, 255), 4, 0.5
                         )
+        
+        # Draw fade overlay (must be last to overlay everything)
+        self.draw_fade_overlay()
 
     def draw_pause(self):
         """Draw pause overlay (optimized)"""
@@ -4030,6 +4287,9 @@ class Game:
             text = self.font_medium.render(opt, True, (220, 220, 220))
             rect = text.get_rect(center=(self.game_state.width // 2, int(self.game_state.height * 0.40) + i * 40))
             self.screen.blit(text, rect)
+        
+        # Draw fade overlay
+        self.draw_fade_overlay()
 
     # =====================================================
     # INPUT HANDLING
@@ -4039,6 +4299,23 @@ class Game:
         """Toggle a door with enhanced visual feedback"""
         if self.power.outage:
             return
+        
+        # Check for door spam (prevent rapid toggling exploit)
+        current_time = time.time()
+        self.door_toggle_history[side].append(current_time)
+        
+        # Keep only toggles from last 5 seconds
+        self.door_toggle_history[side] = [t for t in self.door_toggle_history[side] if current_time - t < 5.0]
+        
+        # If more than 6 toggles in 5 seconds, it's spam
+        if len(self.door_toggle_history[side]) > 6:
+            self.door_spam_penalty += 8.0  # Extra power drain
+            self.set_status(f"Door mechanism stressed! Extra power drain!")
+            # Damage door more from stress
+            if side == "left":
+                self.office.door_left_health = max(0, self.office.door_left_health - 15)
+            else:
+                self.office.door_right_health = max(0, self.office.door_right_health - 15)
 
         if side == "left":
             door_x = 100
@@ -4149,11 +4426,21 @@ class Game:
         if self.office.cams_open:
             self.office.cam_flash = 1.0
             self.total_camera_checks += 1
+            # Play camera flash sound
+            self.assets.play_sound("camera_flash")
+            # Start looping static sound
+            if not self.static_loop_playing:
+                self.assets.play_sound("static_loop", loops=-1)
+                self.static_loop_playing = True
             # Static burst effect
             self.game_state.vhs_effect = min(2.0, self.game_state.vhs_effect + 0.5)
         else:
             # Closing cameras also triggers brief static
             self.game_state.vhs_effect = min(2.0, self.game_state.vhs_effect + 0.3)
+            # Stop static loop
+            if self.static_loop_playing:
+                self.assets.stop_sound("static_loop")
+                self.static_loop_playing = False
 
     def switch_camera(self, index):
         """Switch to a specific camera with enhanced flash"""

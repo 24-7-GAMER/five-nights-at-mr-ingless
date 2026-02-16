@@ -229,7 +229,7 @@ class Jumpscare:
 
 # Static room graph showing connections between rooms
 ROOM_GRAPH = {
-    "Office": ["West Hall", "East Hall"],
+    "Office": ["West Hall", "East Hall", "Supply Closet", "Restrooms"],
     "West Hall": ["Office", "Cafeteria", "Dining Area", "Supply Closet"],
     "East Hall": ["Office", "Gym", "Backstage", "Restrooms"],
     "Stage": ["Dining Area", "Backstage"],
@@ -241,8 +241,8 @@ ROOM_GRAPH = {
     "Library": ["Cafeteria", "Bathrooms"],
     "Bathrooms": ["Gym", "Library", "Vent"],
     "Vent": ["Bathrooms", "Supply Closet", "Restrooms"],
-    "Supply Closet": ["West Hall", "Vent"],
-    "Restrooms": ["East Hall", "Vent"]
+    "Supply Closet": ["Office", "West Hall", "Vent"],
+    "Restrooms": ["Office", "East Hall", "Vent"]
 }
 
 # Static room positions for minimap (x, y as percentages) - SPACED OUT
@@ -2907,6 +2907,13 @@ class Game:
                 if self.safe_spot_duration <= 0:
                     self.current_safe_spot = None
             
+            # Update combo timer
+            if self.combo_timer > 0:
+                self.combo_timer -= dt
+                if self.combo_timer <= 0:
+                    self.combo_timer = 0
+                    self.combo_blocks = 0  # Reset combo when timer runs out
+            
             self.update_power(dt)
             self.update_time(dt)
             self.update_animatronics(dt)
@@ -3473,6 +3480,18 @@ class Game:
             self._overlay_surfaces[cache_key] = crt_surf
         
         self.screen.blit(self._overlay_surfaces[cache_key], (0, 0))
+
+        # Darkness overlay when flashlight is off
+        if not self.office.light_on:
+            cache_key = f"darkness_{self.game_state.width}_{self.game_state.height}"
+            if cache_key not in self._overlay_surfaces:
+                darkness_surface = pygame.Surface((self.game_state.width, self.game_state.height))
+                darkness_surface.fill((0, 0, 0))
+                self._overlay_surfaces[cache_key] = darkness_surface
+            
+            darkness_surface = self._overlay_surfaces[cache_key]
+            darkness_surface.set_alpha(180)  # Very dark but not pitch black
+            self.screen.blit(darkness_surface, (0, 0))
 
         # Static flash overlay (optimized)
         if self.office.cam_flash > 0:

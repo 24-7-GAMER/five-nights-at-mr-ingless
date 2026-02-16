@@ -550,7 +550,7 @@ class Animatronic:
         return None
     
     def update_mood(self, game_state=None):
-        """Update mood based on situation (deterministic) - patrol-focused behavior"""
+        """Update mood based on situation - progressive hunting that scales with time and night"""
         minutes = game_state.minutes_elapsed if game_state else 0
         night = game_state.night if game_state else 1
         
@@ -558,22 +558,60 @@ class Animatronic:
             self.mood = "hunting"
         elif self.block_count >= 5:  # Very frustrated - aggressive hunting
             self.mood = "aggressive"
-        elif self.block_count >= 3:  # Frustrated - hunt sometimes
-            # 40% chance to hunt, 60% stay in patrol mode
-            self.mood = "hunting" if (minutes + self.block_count) % 5 < 2 else "neutral"
-        elif minutes >= 240 or night >= 4:  # Late game or high night - more aggressive
-            self.mood = "aggressive" if minutes % 4 < 2 else "cautious"
-        elif minutes >= 120 or night >= 3:  # Mid-late game - cautiously patrol
-            self.mood = "cautious"
-        elif minutes >= 60 or night >= 2:  # Early-mid game - neutral patrol
-            self.mood = "neutral" if minutes % 3 < 2 else "cautious"
-        else:
-            # Early game - mostly neutral patrol with very occasional hunting
-            if minutes < 30:
-                self.mood = "neutral"  # Peaceful patrol in first 30 minutes
+        elif self.block_count >= 3:  # Frustrated - increased hunting chance
+            # 60% chance to hunt, 40% patrol
+            self.mood = "hunting" if (minutes + self.block_count) % 5 < 3 else "cautious"
+        
+        # Progressive behavior based on night and time
+        elif night >= 5:  # Night 5 - extremely aggressive
+            if minutes < 5:
+                self.mood = "cautious"  # Brief calm
+            elif minutes % 3 < 2:  # 67% hunting
+                self.mood = "aggressive" if minutes % 6 < 3 else "hunting"
             else:
-                # After 30 minutes, 20% chance to hunt, 80% patrol
-                self.mood = "hunting" if minutes % 10 < 2 else "neutral"
+                self.mood = "cautious"
+        
+        elif night >= 4:  # Night 4 - very aggressive
+            if minutes < 10:
+                self.mood = "neutral"  # Short patrol period
+            elif minutes % 4 < 3:  # 75% hunting/aggressive
+                self.mood = "aggressive" if minutes % 8 < 4 else "hunting"
+            else:
+                self.mood = "cautious"
+        
+        elif night >= 3:  # Night 3 - getting serious
+            if minutes < 15:
+                self.mood = "neutral" if minutes % 2 == 0 else "cautious"
+            elif minutes >= 180:  # After 3 hours
+                self.mood = "aggressive" if minutes % 3 < 2 else "hunting"  # 67% aggressive
+            elif minutes >= 60:  # After 1 hour
+                self.mood = "hunting" if minutes % 2 == 0 else "cautious"  # 50% hunting
+            else:
+                self.mood = "cautious" if minutes % 3 < 2 else "hunting"  # 33% hunting
+        
+        elif night >= 2:  # Night 2 - moderate difficulty
+            if minutes < 20:
+                self.mood = "neutral"  # Patrol phase
+            elif minutes >= 150:  # After 2.5 hours
+                self.mood = "hunting" if minutes % 3 < 2 else "cautious"  # 67% hunting
+            elif minutes >= 60:  # After 1 hour
+                self.mood = "hunting" if minutes % 5 < 2 else "neutral"  # 40% hunting
+            else:
+                self.mood = "hunting" if minutes % 7 < 2 else "neutral"  # 29% hunting
+        
+        else:  # Night 1 - tutorial difficulty
+            if minutes < 15:
+                self.mood = "neutral"  # Learn the game
+            elif minutes >= 240:  # After 4 hours (late game)
+                self.mood = "hunting" if minutes % 3 < 2 else "neutral"  # 67% hunting
+            elif minutes >= 120:  # After 2 hours (mid-late)
+                self.mood = "hunting" if minutes % 2 == 0 else "neutral"  # 50% hunting
+            elif minutes >= 60:  # After 1 hour (mid)
+                self.mood = "hunting" if minutes % 5 < 2 else "neutral"  # 40% hunting
+            elif minutes >= 30:  # After 30 minutes (early-mid)
+                self.mood = "hunting" if minutes % 7 < 2 else "neutral"  # 29% hunting
+            else:  # 15-30 minutes (very early)
+                self.mood = "hunting" if minutes % 10 < 2 else "neutral"  # 20% hunting
 
     def get_mood_multiplier(self):
         """Get aggression multiplier based on mood"""

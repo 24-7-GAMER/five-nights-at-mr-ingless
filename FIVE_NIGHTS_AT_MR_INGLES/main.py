@@ -965,9 +965,6 @@ class Game:
         self.native_width = display_info.current_w
         self.native_height = display_info.current_h
         
-        # Calculate scale factor from 720p base to native resolution
-        self.scale_factor = min(self.native_width / WINDOW_WIDTH, self.native_height / WINDOW_HEIGHT)
-        
         # Create fullscreen display at native resolution
         self.display_surface = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
         pygame.display.set_caption(WINDOW_TITLE)
@@ -977,16 +974,21 @@ class Game:
         # Track actual display dimensions (native resolution)
         self.window_width = self.native_width
         self.window_height = self.native_height
-        self.windowed_width = WINDOW_WIDTH  # For reference only
+        self.windowed_width = WINDOW_WIDTH
         self.windowed_height = WINDOW_HEIGHT
-        # Render directly to display at native resolution (no intermediate surface)
-        self.screen = self.display_surface
+        
+        # Render at 720p for perfect asset quality, then upscale cleanly to native resolution
+        self.screen = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT))
+        self.screen_rect = self.screen.get_rect()
+        
+        # Calculate scale factor for clean upscaling
+        self.scale_factor = min(self.native_width / WINDOW_WIDTH, self.native_height / WINDOW_HEIGHT)
 
         # Game components
         self.game_state = GameState()
-        # Update game state to use native resolution
-        self.game_state.width = self.native_width
-        self.game_state.height = self.native_height
+        # Keep game state at 720p for perfect asset rendering
+        self.game_state.width = WINDOW_WIDTH
+        self.game_state.height = WINDOW_HEIGHT
         
         self.power = PowerSystem()
         self.office = Office()
@@ -1002,7 +1004,7 @@ class Game:
         # Animatronics list
         self.animatronics = []
 
-        # Fonts (scaled to native resolution from 720p base)
+        # Fonts (scaled from 720p base to native resolution)
         self.font_small = pygame.font.Font(None, int(20 * self.scale_factor))
         self.font_medium = pygame.font.Font(None, int(32 * self.scale_factor))
         self.font_large = pygame.font.Font(None, int(64 * self.scale_factor))
@@ -1265,20 +1267,34 @@ class Game:
             self.screen.blit(fade_surf, (0, 0))
     
     def scale_mouse_pos(self, pos):
-        """Scale mouse position from window coordinates to game coordinates
-        
-        NOTE: With native resolution rendering, this is now a pass-through
-        since mouse coordinates are already in game space.
-        """
-        return pos
+        """Scale mouse position from window coordinates to game coordinates"""
+        mx, my = pos
+        if self.native_width <= 0 or self.native_height <= 0:
+            return (0, 0)
+        # Scale from display resolution to 720p game resolution
+        game_x = mx / self.scale_factor
+        game_y = my / self.scale_factor
+        return (game_x, game_y)
     
     def scale_and_blit_to_screen(self):
-        """Scale the render surface to the actual window while maintaining aspect ratio
+        """Scale the 720p render surface to native fullscreen resolution with high quality"""
+        if self.scale_factor <= 0:
+            return
         
-        NOTE: With native resolution rendering, this is now a no-op
-        since we render directly to the display surface at native resolution.
-        """
-        pass  # No scaling needed - rendering at native resolution
+        # Calculate scaled dimensions maintaining aspect ratio
+        scaled_width = WINDOW_WIDTH * self.scale_factor
+        scaled_height = WINDOW_HEIGHT * self.scale_factor
+        
+        # Use smoothscale for high-quality upscaling
+        scaled_surface = pygame.transform.smoothscale(self.screen, (int(scaled_width), int(scaled_height)))
+        
+        # Center on display if needed
+        scaled_rect = scaled_surface.get_rect()
+        scaled_rect.center = (self.native_width // 2, self.native_height // 2)
+        
+        # Clear display and blit scaled surface
+        self.display_surface.fill((0, 0, 0))
+        self.display_surface.blit(scaled_surface, scaled_rect)
     
     def set_status(self, msg=""):
         """Set status message"""
@@ -1563,8 +1579,8 @@ class Game:
                         hallway_entry_delay=jitter(2.2, 0.4),
                         aggression_ramp=jitter(0.25, 0.06),
                         rng=self.rng,
-                        display_width=self.game_state.width,
-                        display_height=self.game_state.height),
+                        display_width=WINDOW_WIDTH,
+                        display_height=WINDOW_HEIGHT),
             Animatronic("Freaky Temi", start_rooms[1], jitter(0.34, 0.05), jitter(6.5, 0.7), "teleport",
                         attack_side="right",
                         patrol_route=generate_patrol_route(start_rooms[1], 4),
@@ -1573,8 +1589,8 @@ class Game:
                         aggression_ramp=jitter(0.22, 0.06),
                         rng=self.rng,
                         size_multiplier=0.45,
-                        display_width=self.game_state.width,
-                        display_height=self.game_state.height),
+                        display_width=WINDOW_WIDTH,
+                        display_height=WINDOW_HEIGHT),
             Animatronic("Librarian", start_rooms[2], jitter(0.32, 0.05), jitter(6.8, 0.6), "teleport",
                         attack_side="left",
                         patrol_route=generate_patrol_route(start_rooms[2], 4),
@@ -1582,8 +1598,8 @@ class Game:
                         hallway_entry_delay=jitter(2.4, 0.4),
                         aggression_ramp=jitter(0.24, 0.06),
                         rng=self.rng,
-                        display_width=self.game_state.width,
-                        display_height=self.game_state.height),
+                        display_width=WINDOW_WIDTH,
+                        display_height=WINDOW_HEIGHT),
             Animatronic("Vent Crawler", start_rooms[3], jitter(0.38, 0.05), jitter(5.8, 0.6), "vent",
                         attack_side="vent",
                         patrol_route=generate_patrol_route(start_rooms[3], 4),
@@ -1591,8 +1607,8 @@ class Game:
                         hallway_entry_delay=jitter(2.0, 0.3),
                         aggression_ramp=jitter(0.28, 0.06),
                         rng=self.rng,
-                        display_width=self.game_state.width,
-                        display_height=self.game_state.height),
+                        display_width=WINDOW_WIDTH,
+                        display_height=WINDOW_HEIGHT),
         ]
 
     def start_night(self, night):
@@ -2464,7 +2480,7 @@ class Game:
                         if neighbors:
                             anim.last_room = anim.room
                             anim.room = neighbors[anim.block_count % len(neighbors)]
-                            anim.target_x, anim.target_y = room_position(anim.room, self.game_state.width, self.game_state.height)
+                            anim.target_x, anim.target_y = room_position(anim.room, WINDOW_WIDTH, WINDOW_HEIGHT)
                             anim.x = anim.target_x
                             anim.y = anim.target_y
                             anim.retreat_timer = 8.0  # Stay away for 8 seconds
@@ -2487,7 +2503,7 @@ class Game:
                     )
                     if can_enter:
                         anim.room = "Office"
-                        anim.target_x, anim.target_y = room_position("Office", self.game_state.width, self.game_state.height)
+                        anim.target_x, anim.target_y = room_position("Office", WINDOW_WIDTH, WINDOW_HEIGHT)
                         anim.hallway_timer = 0.0
                         anim.attack_windup = 0.0
                         self.side_entry_cooldown[side] = self.entry_cooldown_seconds
@@ -3035,7 +3051,8 @@ class Game:
         current = self.splash_sequence[self.splash_stage]
         splash = self.assets.get_image(current["key"])
         if splash:
-            scaled = pygame.transform.scale(splash, (self.game_state.width, self.game_state.height))
+            # Scale using high-quality smoothscale
+            scaled = pygame.transform.smoothscale(splash, (self.game_state.width, self.game_state.height))
             self.screen.blit(scaled, (0, 0))
         else:
             self.screen.fill((0, 0, 0))
@@ -4140,7 +4157,10 @@ class Game:
         
         # X button hover effect
         mouse_pos = pygame.mouse.get_pos()
-        is_hovering = self.menu_x_button_rect.collidepoint(mouse_pos)
+        # Convert mouse position from display to 720p game space
+        game_mouse_x = mouse_pos[0] / self.scale_factor
+        game_mouse_y = mouse_pos[1] / self.scale_factor
+        is_hovering = self.menu_x_button_rect.collidepoint(game_mouse_x, game_mouse_y)
         x_button_color = (255, 100, 100) if is_hovering else (200, 200, 200)
         x_button_bg = (80, 20, 20) if is_hovering else (40, 40, 60)
         
@@ -4725,7 +4745,7 @@ class Game:
         for anim in self.animatronics:
             if anim.room == "Office":
                 anim.room = "Hallway"
-                anim.target_x, anim.target_y = room_position("Hallway", self.game_state.width, self.game_state.height)
+                anim.target_x, anim.target_y = room_position("Hallway", WINDOW_WIDTH, WINDOW_HEIGHT)
 
     def handle_input(self):
         """Handle all input"""

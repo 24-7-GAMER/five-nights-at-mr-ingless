@@ -2,6 +2,16 @@
 """
 Five Nights at Mr Ingles's (Game Engine - Pygame)
 LUA -> PYTHON PORT (this took way too long)
+
+PERFORMANCE OPTIMIZATIONS (60 FPS Target):
+- Menu gradient cached and regenerated only 2x/second
+- Title image cached at discretized pulse values (smooth animation, minimal scaling)
+- Animatronic sprites cached at discretized scales
+- Text rendering can use render_text_cached() for static text
+- Background/door/overlay images cached at specific sizes
+- Static effect intensity scales with quality_scale
+- Dynamic quality adjustment based on FPS (lines 4895-4902)
+- FPS display shows performance in real-time (top-right during gameplay)
 """
 
 import sys
@@ -1173,6 +1183,12 @@ class Game:
     def clamp(self, x, a, b):
         """Clamp value between a and b"""
         return max(a, min(x, b))
+    
+    def render_text_cached(self, font, text, color, antialias=True):
+        """Render text with caching for performance"""
+        # Create cache key from font size, text, and color
+        font_id = id(font)
+        cache_key = f\"text_{font_id}_{text}_{color}_{antialias}\"\n        \n        if cache_key not in self._cached_surfaces:\n            rendered = font.render(text, antialias, color)\n            self._cached_surfaces[cache_key] = rendered\n            \n            # Limit cache size to prevent memory leaks\n            if len(self._cached_surfaces) > 500:\n                # Remove oldest entry (first in dict)\n                first_key = next(iter(self._cached_surfaces))\n                del self._cached_surfaces[first_key]\n        \n        return self._cached_surfaces[cache_key]
     
     def start_fade_out(self, callback=None):
         """Start a fade to black transition"""
@@ -3301,18 +3317,13 @@ class Game:
         if sprite:
             wobble = math.sin(current_time * 2 + anim.x * 0.01) * 0.02
             scale = 0.4 * (self.game_state.width / 1280) * (1 + wobble) * anim.size_multiplier
-            scaled = pygame.transform.scale(sprite, 
-                (int(sprite.get_width() * scale), int(sprite.get_height() * scale)))
-            # Apply camera offset to animatronic position
-            anim_x = anim.x + self.office_camera_offset_x
-            anim_y = anim.y + self.office_camera_offset_y + wobble * 40
-            rect = scaled.get_rect(center=(anim_x, anim_y))
-            self.screen.blit(scaled, rect)
-        else:
-            # Apply camera offset to debug circle as well
-            pygame.draw.circle(self.screen, (255, 0, 0), 
-                             (int(anim.x + self.office_camera_offset_x), 
-                              int(anim.y + self.office_camera_offset_y)), 25)
+            
+            # OPTIMIZED: Cache scaled sprite at discrete scale values
+            scale_discretized = round(scale * 20) / 20  # Round to nearest 0.05
+            target_w = int(sprite.get_width() * scale_discretized)
+            target_h = int(sprite.get_height() * scale_discretized)
+            
+            cache_key = f\"anim_{anim.name}_{target_w}_{target_h}\"\n            if cache_key not in self._overlay_surfaces:\n                scaled = pygame.transform.scale(sprite, (target_w, target_h))\n                self._overlay_surfaces[cache_key] = scaled\n                # Limit anim cache\n                anim_keys = [k for k in self._overlay_surfaces.keys() if k.startswith(\"anim_\")]\n                if len(anim_keys) > 20:\n                    del self._overlay_surfaces[anim_keys[0]]\n            \n            scaled = self._overlay_surfaces[cache_key]\n            # Apply camera offset to animatronic position\n            anim_x = anim.x + self.office_camera_offset_x\n            anim_y = anim.y + self.office_camera_offset_y + wobble * 40\n            rect = scaled.get_rect(center=(anim_x, anim_y))\n            self.screen.blit(scaled, rect)\n        else:\n            # Apply camera offset to debug circle as well\n            pygame.draw.circle(self.screen, (255, 0, 0), \n                             (int(anim.x + self.office_camera_offset_x), \n                              int(anim.y + self.office_camera_offset_y)), 25)
 
     def draw_office_overlays(self):
         """Draw door and light overlays (optimized with caching)"""
@@ -3621,6 +3632,10 @@ class Game:
         pygame.draw.rect(self.screen, (200, 100, 200), (night_rect.x - 10, night_rect.y - 5,
                          night_rect.width + 20, night_rect.height + 10), 2)
         self.screen.blit(night_text, night_rect)
+        
+        # FPS display (always show for performance monitoring)
+        fps_color = (100, 255, 100) if self.current_fps >= 58 else (255, 200, 0) if self.current_fps >= 45 else (255, 100, 100)
+        fps_text = self.font_small.render(f\"FPS: {int(self.current_fps)}\", True, fps_color)\n        fps_rect = fps_text.get_rect(topright=(self.game_state.width - 20, 55))\n        pygame.draw.rect(self.screen, (20, 20, 20), (fps_rect.x - 10, fps_rect.y - 5,\n                         fps_rect.width + 20, fps_rect.height + 10), 0)\n        pygame.draw.rect(self.screen, fps_color, (fps_rect.x - 10, fps_rect.y - 5,\n                         fps_rect.width + 20, fps_rect.height + 10), 2)\n        self.screen.blit(fps_text, fps_rect)
 
         # Status message with urgency
         if self.game_state.status:
@@ -3842,7 +3857,7 @@ class Game:
         # Clear screen first to prevent black screen issues
         self.screen.fill((0, 0, 0))
         
-        # Draw background image if available, otherwise use gradient
+        # Draw background image if available, otherwise use cached gradient
         bg_img = self.assets.get_image("menu_background")
         if bg_img:
             # Cache scaled menu background
@@ -3853,16 +3868,33 @@ class Game:
             
             self.screen.blit(self._overlay_surfaces[cache_key], (0, 0))
         else:
-            # Fallback to gradient if no background image
-            time_offset = time.time() * 0.5
-            color_shift = math.sin(time.time() * 0.5) * 30
-            for y in range(self.game_state.height):
-                ratio = y / self.game_state.height
-                wave = math.sin(time_offset + ratio * 3) * 0.1
-                r = int(self.clamp(10 + 35 * ratio + wave * 20 + color_shift * 0.3, 0, 255))
-                g = int(self.clamp(10 + 15 * ratio + color_shift * 0.1, 0, 255))
-                b = int(self.clamp(50 + 25 * ratio + wave * 10 + color_shift * 0.2, 0, 255))
-                pygame.draw.line(self.screen, (r, g, b), (0, y), (self.game_state.width, y))
+            # OPTIMIZED: Cache gradient background, only regenerate every 0.5 seconds
+            current_time = time.time()
+            cache_frame = int(current_time * 2)  # Update twice per second for animation
+            cache_key = f"menu_gradient_{self.game_state.width}_{self.game_state.height}_{cache_frame}"
+            
+            if cache_key not in self._overlay_surfaces:
+                # Clean old gradient caches
+                old_keys = [k for k in self._overlay_surfaces.keys() if k.startswith("menu_gradient_") and k != cache_key]
+                for old_key in old_keys:
+                    del self._overlay_surfaces[old_key]
+                
+                # Generate gradient surface
+                gradient_surf = pygame.Surface((self.game_state.width, self.game_state.height))
+                time_offset = current_time * 0.5
+                color_shift = math.sin(current_time * 0.5) * 30
+                
+                for y in range(self.game_state.height):
+                    ratio = y / self.game_state.height
+                    wave = math.sin(time_offset + ratio * 3) * 0.1
+                    r = int(self.clamp(10 + 35 * ratio + wave * 20 + color_shift * 0.3, 0, 255))
+                    g = int(self.clamp(10 + 15 * ratio + color_shift * 0.1, 0, 255))
+                    b = int(self.clamp(50 + 25 * ratio + wave * 10 + color_shift * 0.2, 0, 255))
+                    pygame.draw.line(gradient_surf, (r, g, b), (0, y), (self.game_state.width, y))
+                
+                self._overlay_surfaces[cache_key] = gradient_surf
+            
+            self.screen.blit(self._overlay_surfaces[cache_key], (0, 0))
 
         # Pulsing glow effect behind title
         pulse = math.sin(time.time() * 2) * 0.2 + 0.8
@@ -3871,8 +3903,11 @@ class Game:
         # Title image (fallback to text if missing)
         title_img = self.assets.get_image("title")
         if title_img:
-            # pulsing scale animation for title
+            # OPTIMIZED: Cache pre-scaled title at discretized pulse values
             pulse_scale = math.sin(time.time() * 1.5) * 0.08 + 1.0
+            # Round to nearest 0.02 to reduce cache entries while keeping smooth animation
+            pulse_scale = round(pulse_scale / 0.02) * 0.02
+            
             target_w = int(self.game_state.width * 1.0 * pulse_scale)
             scale = target_w / title_img.get_width()
             target_h = int(title_img.get_height() * scale)
@@ -3882,11 +3917,8 @@ class Game:
                 scale = max_h / title_img.get_height()
                 target_h = int(title_img.get_height() * scale)
                 target_w = int(title_img.get_width() * scale)
-            scaled = pygame.transform.smoothscale(title_img, (target_w, target_h))
-            rect = scaled.get_rect(center=(self.game_state.width // 2, int(self.game_state.height * 0.25)))
-            # glowing aura behind title
-            glow_alpha = int(100 * (math.sin(time.time() * 2) * 0.3 + 0.5))
-            self.screen.blit(scaled, rect)
+            
+            cache_key = f\"title_scaled_{target_w}_{target_h}\"\n            if cache_key not in self._overlay_surfaces:\n                scaled = pygame.transform.smoothscale(title_img, (target_w, target_h))\n                self._overlay_surfaces[cache_key] = scaled\n                # Limit title cache size\n                title_keys = [k for k in self._overlay_surfaces.keys() if k.startswith(\"title_scaled_\")]\n                if len(title_keys) > 15:\n                    # Remove oldest\n                    del self._overlay_surfaces[title_keys[0]]\n            \n            scaled = self._overlay_surfaces[cache_key]\n            rect = scaled.get_rect(center=(self.game_state.width // 2, int(self.game_state.height * 0.25)))\n            self.screen.blit(scaled, rect)
         else:
             # Glow shadow effect
             shadow_color = (int(30 * pulse), int(80 * pulse), int(100 * pulse))

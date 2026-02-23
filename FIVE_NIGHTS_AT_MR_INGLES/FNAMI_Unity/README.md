@@ -26,7 +26,9 @@ Run it with:
 ```bash
 python main.py
 ```
-
+- Double click `launch.py` to run without command line and install dependencies automatically.
+- Just double click `main.py` to run it directly.
+- Or use `build_executable.py` to create a standalone executable.
 ## Unity Port ETA
 
 The Unity port will be ready when:

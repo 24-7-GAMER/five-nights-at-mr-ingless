@@ -2986,8 +2986,8 @@ class Game:
         
         # For ToS screen (stage 2), require checkbox agreement
         if self.splash_stage == 2:
-            # Don't auto-advance, wait for checkbox click
-            if self.tos_agreed and self.splash_timer >= total:
+            # Stay on ToS screen until user checks the checkbox
+            if self.tos_agreed:
                 self.splash_timer = 0.0
                 self.splash_stage += 1
                 if self.splash_stage >= len(self.splash_sequence):

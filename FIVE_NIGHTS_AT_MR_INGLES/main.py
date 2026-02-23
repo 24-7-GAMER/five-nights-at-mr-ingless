@@ -35,7 +35,7 @@ if getattr(sys, 'frozen', False):
 else:
     # Running as normal Python script
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-    print("🐍 Running as Python script")
+    print("🐍 Running as Python script using Pygame engine")
 
 # Change working directory to BASE_DIR for relative path support
 try:
@@ -78,7 +78,7 @@ import pygame
 
 WINDOW_WIDTH = 1280
 WINDOW_HEIGHT = 720
-WINDOW_TITLE = "Five Nights at Mr Ingles's"
+WINDOW_TITLE = "Five Nights at Mr Ingles's - Ali Imran (2025)"
 FPS = 60
 SAVE_FILE = os.path.join(BASE_DIR, "mr_ingles_save.json")
 
@@ -295,7 +295,8 @@ class Animatronic:
     """Animatronic character with deterministic AI"""
     def __init__(self, name, start_room, base_aggro, base_interval, style="teleport",
                  attack_side="left", patrol_route=None, start_delay_minutes=0,
-                 hallway_entry_delay=2.0, aggression_ramp=0.25, rng=None, size_multiplier=1.0):
+                 hallway_entry_delay=2.0, aggression_ramp=0.25, rng=None, size_multiplier=1.0,
+                 display_width=1280, display_height=720):
         self.name = name
         self.room = start_room
         self.base_aggro = base_aggro
@@ -307,6 +308,8 @@ class Animatronic:
         self.attack_side = attack_side
         self.rng = rng
         self.size_multiplier = size_multiplier
+        self.display_width = display_width
+        self.display_height = display_height
         route = patrol_route or [start_room]
         if self.rng and len(route) > 1:
             # Rotate route per run to keep patterns unique without breaking graph
@@ -321,7 +324,7 @@ class Animatronic:
         self.start_delay_minutes = start_delay_minutes
         self.hallway_entry_delay = hallway_entry_delay
         self.aggression_ramp = aggression_ramp
-        self.x, self.y = room_position(start_room, WINDOW_WIDTH, WINDOW_HEIGHT)
+        self.x, self.y = room_position(start_room, self.display_width, self.display_height)
         self.target_x = self.x
         self.target_y = self.y
         self.visible_on_cam = True
@@ -643,7 +646,7 @@ class Animatronic:
         if next_room != self.room:
             self.last_room = self.room
             self.room = next_room
-            self.target_x, self.target_y = room_position(self.room, WINDOW_WIDTH, WINDOW_HEIGHT)
+            self.target_x, self.target_y = room_position(self.room, self.display_width, self.display_height)
 
     def move_toward_target(self, target_room):
         """Move toward a specific target room"""
@@ -671,7 +674,7 @@ class Animatronic:
         if best_room != self.room:
             self.last_room = self.room
             self.room = best_room
-            self.target_x, self.target_y = room_position(self.room, WINDOW_WIDTH, WINDOW_HEIGHT)
+            self.target_x, self.target_y = room_position(self.room, self.display_width, self.display_height)
 
     def _distance_to_room(self, from_room, to_room):
         """Estimate distance between rooms"""
@@ -955,24 +958,36 @@ class Game:
         try:
             pygame.mixer.init()
         except Exception as e:
-            print(f"⚠️  Warning: Audio mixer failed to initialize: {e}")
+            print(f"⚠️  Warning: Audio mixer failed to initialize, you will not hear any sound effects or music: {e}")
 
-        # Create resizable window
-        self.display_surface = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.RESIZABLE)
+        # Detect native screen resolution and go fullscreen
+        display_info = pygame.display.Info()
+        self.native_width = display_info.current_w
+        self.native_height = display_info.current_h
+        
+        # Calculate scale factor from 720p base to native resolution
+        self.scale_factor = min(self.native_width / WINDOW_WIDTH, self.native_height / WINDOW_HEIGHT)
+        
+        # Create fullscreen display at native resolution
+        self.display_surface = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
         pygame.display.set_caption(WINDOW_TITLE)
         self.clock = pygame.time.Clock()
         self.running = True
         
-        # Track window size for scaling
-        self.window_width = WINDOW_WIDTH
-        self.window_height = WINDOW_HEIGHT
-        self.windowed_width = WINDOW_WIDTH
+        # Track actual display dimensions (native resolution)
+        self.window_width = self.native_width
+        self.window_height = self.native_height
+        self.windowed_width = WINDOW_WIDTH  # For reference only
         self.windowed_height = WINDOW_HEIGHT
-        # Render to this surface at fixed resolution, then scale to display
-        self.screen = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT))
+        # Render directly to display at native resolution (no intermediate surface)
+        self.screen = self.display_surface
 
         # Game components
         self.game_state = GameState()
+        # Update game state to use native resolution
+        self.game_state.width = self.native_width
+        self.game_state.height = self.native_height
+        
         self.power = PowerSystem()
         self.office = Office()
         self.cameras = CameraSystem()
@@ -987,12 +1002,12 @@ class Game:
         # Animatronics list
         self.animatronics = []
 
-        # Fonts (scaled for 1280x720 resolution)
-        self.font_small = pygame.font.Font(None, 20)
-        self.font_medium = pygame.font.Font(None, 32)
-        self.font_large = pygame.font.Font(None, 64)
-        self.font_title = pygame.font.Font(None, 80)
-        self.font_button = pygame.font.Font(None, 36)
+        # Fonts (scaled to native resolution from 720p base)
+        self.font_small = pygame.font.Font(None, int(20 * self.scale_factor))
+        self.font_medium = pygame.font.Font(None, int(32 * self.scale_factor))
+        self.font_large = pygame.font.Font(None, int(64 * self.scale_factor))
+        self.font_title = pygame.font.Font(None, int(80 * self.scale_factor))
+        self.font_button = pygame.font.Font(None, int(36 * self.scale_factor))
         
         # Visual effects
         self.screen_shake = 1
@@ -1058,7 +1073,7 @@ class Game:
         self.generator_progress = 0
         self.generator_target_keys = []
         self.nightmare_mode = False
-        self.safe_spots_available = ["Closet", "Under Desk", "Vent"]
+        self.safe_spots_available = ["Cupboard", "Under Desk", "Vent"]
         self.current_safe_spot = None
         self.safe_spot_duration = 0
         self.footstep_sounds = []  # Track animatronic movements
@@ -1113,9 +1128,12 @@ class Game:
 
         # Menu functional toggles (non-visual)
         self.skip_tutorial = False
-        self.fullscreen = False
+        self.fullscreen = True  # Always fullscreen now
         self.last_reset_request = 0.0
         self.fps_cap_enabled = True
+        
+        # Menu X button for quitting
+        self.menu_x_button_rect = None  # Will be set during draw_menu
 
         # Intro sequence (Night 1) - only show once per game session
         self.intro_messages = []
@@ -1173,7 +1191,7 @@ class Game:
         self.assets.load_all_assets()
         print("✅ Assets loaded")
         
-        print("🖥️  Rendering surface initialized")
+        print("Starting game...")
         
         self.load_save()
 
@@ -1188,7 +1206,19 @@ class Game:
         """Render text with caching for performance"""
         # Create cache key from font size, text, and color
         font_id = id(font)
-        cache_key = f\"text_{font_id}_{text}_{color}_{antialias}\"\n        \n        if cache_key not in self._cached_surfaces:\n            rendered = font.render(text, antialias, color)\n            self._cached_surfaces[cache_key] = rendered\n            \n            # Limit cache size to prevent memory leaks\n            if len(self._cached_surfaces) > 500:\n                # Remove oldest entry (first in dict)\n                first_key = next(iter(self._cached_surfaces))\n                del self._cached_surfaces[first_key]\n        \n        return self._cached_surfaces[cache_key]
+        cache_key = f"text_{font_id}_{text}_{color}_{antialias}"
+        
+        if cache_key not in self._cached_surfaces:
+            rendered = font.render(text, antialias, color)
+            self._cached_surfaces[cache_key] = rendered
+            
+            # Limit cache size to prevent memory leaks
+            if len(self._cached_surfaces) > 500:
+                # Remove oldest entry (first in dict)
+                first_key = next(iter(self._cached_surfaces))
+                del self._cached_surfaces[first_key]
+        
+        return self._cached_surfaces[cache_key]
     
     def start_fade_out(self, callback=None):
         """Start a fade to black transition"""
@@ -1235,49 +1265,20 @@ class Game:
             self.screen.blit(fade_surf, (0, 0))
     
     def scale_mouse_pos(self, pos):
-        """Scale mouse position from window coordinates to game coordinates"""
-        mx, my = pos
-        if self.window_width <= 0 or self.window_height <= 0:
-            return (0, 0)
-        # Calculate scale factors
-        scale_x = WINDOW_WIDTH / self.window_width
-        scale_y = WINDOW_HEIGHT / self.window_height
-        # Use the smaller scale to maintain aspect ratio
-        scale = min(scale_x, scale_y)
-        # Calculate scaled dimensions
-        scaled_w = WINDOW_WIDTH / scale
-        scaled_h = WINDOW_HEIGHT / scale
-        # Calculate offset for centering
-        offset_x = (self.window_width - scaled_w) / 2
-        offset_y = (self.window_height - scaled_h) / 2
-        # Scale and offset mouse position
-        game_x = (mx - offset_x) * scale
-        game_y = (my - offset_y) * scale
-        return (game_x, game_y)
+        """Scale mouse position from window coordinates to game coordinates
+        
+        NOTE: With native resolution rendering, this is now a pass-through
+        since mouse coordinates are already in game space.
+        """
+        return pos
     
     def scale_and_blit_to_screen(self):
-        """Scale the render surface to the actual window while maintaining aspect ratio"""
-        if self.window_width <= 0 or self.window_height <= 0:
-            return
-        # Calculate scale to fit window while maintaining aspect ratio
-        scale_x = self.window_width / WINDOW_WIDTH
-        scale_y = self.window_height / WINDOW_HEIGHT
-        scale = min(scale_x, scale_y)
+        """Scale the render surface to the actual window while maintaining aspect ratio
         
-        # Calculate scaled dimensions
-        scaled_width = int(WINDOW_WIDTH * scale)
-        scaled_height = int(WINDOW_HEIGHT * scale)
-        
-        # Calculate position to center the scaled surface
-        x = (self.window_width - scaled_width) // 2
-        y = (self.window_height - scaled_height) // 2
-        
-        # Fill display with black bars
-        self.display_surface.fill((0, 0, 0))
-        
-        # Scale and blit the game surface
-        scaled_surface = pygame.transform.scale(self.screen, (scaled_width, scaled_height))
-        self.display_surface.blit(scaled_surface, (x, y))
+        NOTE: With native resolution rendering, this is now a no-op
+        since we render directly to the display surface at native resolution.
+        """
+        pass  # No scaling needed - rendering at native resolution
     
     def set_status(self, msg=""):
         """Set status message"""
@@ -1561,7 +1562,9 @@ class Game:
                         start_delay_minutes=self.rng.randint(2, 5),
                         hallway_entry_delay=jitter(2.2, 0.4),
                         aggression_ramp=jitter(0.25, 0.06),
-                        rng=self.rng),
+                        rng=self.rng,
+                        display_width=self.game_state.width,
+                        display_height=self.game_state.height),
             Animatronic("Freaky Temi", start_rooms[1], jitter(0.34, 0.05), jitter(6.5, 0.7), "teleport",
                         attack_side="right",
                         patrol_route=generate_patrol_route(start_rooms[1], 4),
@@ -1569,21 +1572,27 @@ class Game:
                         hallway_entry_delay=jitter(2.6, 0.4),
                         aggression_ramp=jitter(0.22, 0.06),
                         rng=self.rng,
-                        size_multiplier=0.45),
+                        size_multiplier=0.45,
+                        display_width=self.game_state.width,
+                        display_height=self.game_state.height),
             Animatronic("Librarian", start_rooms[2], jitter(0.32, 0.05), jitter(6.8, 0.6), "teleport",
                         attack_side="left",
                         patrol_route=generate_patrol_route(start_rooms[2], 4),
                         start_delay_minutes=self.rng.randint(6, 11),
                         hallway_entry_delay=jitter(2.4, 0.4),
                         aggression_ramp=jitter(0.24, 0.06),
-                        rng=self.rng),
+                        rng=self.rng,
+                        display_width=self.game_state.width,
+                        display_height=self.game_state.height),
             Animatronic("Vent Crawler", start_rooms[3], jitter(0.38, 0.05), jitter(5.8, 0.6), "vent",
                         attack_side="vent",
                         patrol_route=generate_patrol_route(start_rooms[3], 4),
                         start_delay_minutes=self.rng.randint(15, 21),
                         hallway_entry_delay=jitter(2.0, 0.3),
                         aggression_ramp=jitter(0.28, 0.06),
-                        rng=self.rng),
+                        rng=self.rng,
+                        display_width=self.game_state.width,
+                        display_height=self.game_state.height),
         ]
 
     def start_night(self, night):
@@ -2455,7 +2464,7 @@ class Game:
                         if neighbors:
                             anim.last_room = anim.room
                             anim.room = neighbors[anim.block_count % len(neighbors)]
-                            anim.target_x, anim.target_y = room_position(anim.room, WINDOW_WIDTH, WINDOW_HEIGHT)
+                            anim.target_x, anim.target_y = room_position(anim.room, self.game_state.width, self.game_state.height)
                             anim.x = anim.target_x
                             anim.y = anim.target_y
                             anim.retreat_timer = 8.0  # Stay away for 8 seconds
@@ -2478,7 +2487,7 @@ class Game:
                     )
                     if can_enter:
                         anim.room = "Office"
-                        anim.target_x, anim.target_y = room_position("Office", WINDOW_WIDTH, WINDOW_HEIGHT)
+                        anim.target_x, anim.target_y = room_position("Office", self.game_state.width, self.game_state.height)
                         anim.hallway_timer = 0.0
                         anim.attack_windup = 0.0
                         self.side_entry_cooldown[side] = self.entry_cooldown_seconds
@@ -3323,7 +3332,26 @@ class Game:
             target_w = int(sprite.get_width() * scale_discretized)
             target_h = int(sprite.get_height() * scale_discretized)
             
-            cache_key = f\"anim_{anim.name}_{target_w}_{target_h}\"\n            if cache_key not in self._overlay_surfaces:\n                scaled = pygame.transform.scale(sprite, (target_w, target_h))\n                self._overlay_surfaces[cache_key] = scaled\n                # Limit anim cache\n                anim_keys = [k for k in self._overlay_surfaces.keys() if k.startswith(\"anim_\")]\n                if len(anim_keys) > 20:\n                    del self._overlay_surfaces[anim_keys[0]]\n            \n            scaled = self._overlay_surfaces[cache_key]\n            # Apply camera offset to animatronic position\n            anim_x = anim.x + self.office_camera_offset_x\n            anim_y = anim.y + self.office_camera_offset_y + wobble * 40\n            rect = scaled.get_rect(center=(anim_x, anim_y))\n            self.screen.blit(scaled, rect)\n        else:\n            # Apply camera offset to debug circle as well\n            pygame.draw.circle(self.screen, (255, 0, 0), \n                             (int(anim.x + self.office_camera_offset_x), \n                              int(anim.y + self.office_camera_offset_y)), 25)
+            cache_key = f"anim_{anim.name}_{target_w}_{target_h}"
+            if cache_key not in self._overlay_surfaces:
+                scaled = pygame.transform.scale(sprite, (target_w, target_h))
+                self._overlay_surfaces[cache_key] = scaled
+                # Limit anim cache
+                anim_keys = [k for k in self._overlay_surfaces.keys() if k.startswith("anim_")]
+                if len(anim_keys) > 20:
+                    del self._overlay_surfaces[anim_keys[0]]
+            
+            scaled = self._overlay_surfaces[cache_key]
+            # Apply camera offset to animatronic position
+            anim_x = anim.x + self.office_camera_offset_x
+            anim_y = anim.y + self.office_camera_offset_y + wobble * 40
+            rect = scaled.get_rect(center=(anim_x, anim_y))
+            self.screen.blit(scaled, rect)
+        else:
+            # Apply camera offset to debug circle as well
+            pygame.draw.circle(self.screen, (255, 0, 0), 
+                             (int(anim.x + self.office_camera_offset_x), 
+                              int(anim.y + self.office_camera_offset_y)), 25)
 
     def draw_office_overlays(self):
         """Draw door and light overlays (optimized with caching)"""
@@ -3635,7 +3663,13 @@ class Game:
         
         # FPS display (always show for performance monitoring)
         fps_color = (100, 255, 100) if self.current_fps >= 58 else (255, 200, 0) if self.current_fps >= 45 else (255, 100, 100)
-        fps_text = self.font_small.render(f\"FPS: {int(self.current_fps)}\", True, fps_color)\n        fps_rect = fps_text.get_rect(topright=(self.game_state.width - 20, 55))\n        pygame.draw.rect(self.screen, (20, 20, 20), (fps_rect.x - 10, fps_rect.y - 5,\n                         fps_rect.width + 20, fps_rect.height + 10), 0)\n        pygame.draw.rect(self.screen, fps_color, (fps_rect.x - 10, fps_rect.y - 5,\n                         fps_rect.width + 20, fps_rect.height + 10), 2)\n        self.screen.blit(fps_text, fps_rect)
+        fps_text = self.font_small.render(f"FPS: {int(self.current_fps)}", True, fps_color)
+        fps_rect = fps_text.get_rect(topright=(self.game_state.width - 20, 55))
+        pygame.draw.rect(self.screen, (20, 20, 20), (fps_rect.x - 10, fps_rect.y - 5,
+                         fps_rect.width + 20, fps_rect.height + 10), 0)
+        pygame.draw.rect(self.screen, fps_color, (fps_rect.x - 10, fps_rect.y - 5,
+                         fps_rect.width + 20, fps_rect.height + 10), 2)
+        self.screen.blit(fps_text, fps_rect)
 
         # Status message with urgency
         if self.game_state.status:
@@ -3918,7 +3952,19 @@ class Game:
                 target_h = int(title_img.get_height() * scale)
                 target_w = int(title_img.get_width() * scale)
             
-            cache_key = f\"title_scaled_{target_w}_{target_h}\"\n            if cache_key not in self._overlay_surfaces:\n                scaled = pygame.transform.smoothscale(title_img, (target_w, target_h))\n                self._overlay_surfaces[cache_key] = scaled\n                # Limit title cache size\n                title_keys = [k for k in self._overlay_surfaces.keys() if k.startswith(\"title_scaled_\")]\n                if len(title_keys) > 15:\n                    # Remove oldest\n                    del self._overlay_surfaces[title_keys[0]]\n            \n            scaled = self._overlay_surfaces[cache_key]\n            rect = scaled.get_rect(center=(self.game_state.width // 2, int(self.game_state.height * 0.25)))\n            self.screen.blit(scaled, rect)
+            cache_key = f"title_scaled_{target_w}_{target_h}"
+            if cache_key not in self._overlay_surfaces:
+                scaled = pygame.transform.smoothscale(title_img, (target_w, target_h))
+                self._overlay_surfaces[cache_key] = scaled
+                # Limit title cache size
+                title_keys = [k for k in self._overlay_surfaces.keys() if k.startswith("title_scaled_")]
+                if len(title_keys) > 15:
+                    # Remove oldest
+                    del self._overlay_surfaces[title_keys[0]]
+            
+            scaled = self._overlay_surfaces[cache_key]
+            rect = scaled.get_rect(center=(self.game_state.width // 2, int(self.game_state.height * 0.25)))
+            self.screen.blit(scaled, rect)
         else:
             # Glow shadow effect
             shadow_color = (int(30 * pulse), int(80 * pulse), int(100 * pulse))
@@ -4027,7 +4073,7 @@ class Game:
         self.screen.blit(record, record_rect)
 
         # Key hint
-        hint_text = self.font_small.render("[1-5] Select  |  [ESC] Quit", True, (150, 180, 200))
+        hint_text = self.font_small.render("[1-5] Select  |  [X Button] Quit", True, (150, 180, 200))
         hint_rect = hint_text.get_rect(center=(self.game_state.width // 2, int(self.game_state.height * 0.90)))
         self.screen.blit(hint_text, hint_rect)
 
@@ -4085,7 +4131,36 @@ class Game:
         hint_rect2 = slider_hint.get_rect(center=(self.game_state.width // 2, int(self.game_state.height * 0.94)))
         self.screen.blit(slider_hint, hint_rect2)
 
-# Subtle static for creepy vibe
+        # X button in top-right corner to quit
+        x_button_size = int(50 * self.scale_factor)
+        x_button_padding = int(20 * self.scale_factor)
+        x_button_x = self.game_state.width - x_button_size - x_button_padding
+        x_button_y = x_button_padding
+        self.menu_x_button_rect = pygame.Rect(x_button_x, x_button_y, x_button_size, x_button_size)
+        
+        # X button hover effect
+        mouse_pos = pygame.mouse.get_pos()
+        is_hovering = self.menu_x_button_rect.collidepoint(mouse_pos)
+        x_button_color = (255, 100, 100) if is_hovering else (200, 200, 200)
+        x_button_bg = (80, 20, 20) if is_hovering else (40, 40, 60)
+        
+        # Draw X button background
+        pygame.draw.rect(self.screen, x_button_bg, self.menu_x_button_rect)
+        pygame.draw.rect(self.screen, x_button_color, self.menu_x_button_rect, 3)
+        
+        # Draw X symbol
+        x_line_thickness = int(4 * self.scale_factor)
+        padding = int(12 * self.scale_factor)
+        pygame.draw.line(self.screen, x_button_color, 
+                        (x_button_x + padding, x_button_y + padding),
+                        (x_button_x + x_button_size - padding, x_button_y + x_button_size - padding),
+                        x_line_thickness)
+        pygame.draw.line(self.screen, x_button_color,
+                        (x_button_x + x_button_size - padding, x_button_y + padding),
+                        (x_button_x + padding, x_button_y + x_button_size - padding),
+                        x_line_thickness)
+
+        # Subtle static for creepy vibe
         self.apply_creepy_static(0.15)
         
         # Draw fade overlay
@@ -4650,7 +4725,7 @@ class Game:
         for anim in self.animatronics:
             if anim.room == "Office":
                 anim.room = "Hallway"
-                anim.target_x, anim.target_y = room_position("Hallway", WINDOW_WIDTH, WINDOW_HEIGHT)
+                anim.target_x, anim.target_y = room_position("Hallway", self.game_state.width, self.game_state.height)
 
     def handle_input(self):
         """Handle all input"""
@@ -4681,6 +4756,12 @@ class Game:
                 if self.game_state.state == "menu":
                     # Scale mouse position to game coordinates
                     mx, my = self.scale_mouse_pos(event.pos)
+                    
+                    # X button click to quit
+                    if self.menu_x_button_rect and self.menu_x_button_rect.collidepoint(mx, my):
+                        self.running = False
+                        continue
+                    
                     slider_width = 420
                     slider_x = (self.game_state.width - slider_width) // 2
                     slider_y = int(self.game_state.height * 0.82)
@@ -4749,10 +4830,9 @@ class Game:
             elif event.type == pygame.KEYDOWN:
                 key = pygame.key.name(event.key)
 
-                if key == "escape":
-                    self.running = False
+                # ESC key disabled - use X button in menu instead
 
-                elif self.game_state.state == "anti_cheat_message":
+                if self.game_state.state == "anti_cheat_message":
                     if key == "m":
                         self.anti_cheat_active = False
                         self.anti_cheat_pending = False

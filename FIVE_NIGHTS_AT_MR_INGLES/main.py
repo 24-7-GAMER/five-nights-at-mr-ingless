@@ -4182,9 +4182,9 @@ class Game:
                         (x_button_x + padding, x_button_y + x_button_size - padding),
                         x_line_thickness)
 
-        # NEON SLIP promo button in bottom-left corner
-        promo_width = int(280 * self.scale_factor)
-        promo_height = int(80 * self.scale_factor)
+        # NEON SLIP promo button in bottom-left corner (compact)
+        promo_width = int(160 * self.scale_factor)
+        promo_height = int(50 * self.scale_factor)
         promo_padding = int(20 * self.scale_factor)
         promo_x = promo_padding
         promo_y = self.game_state.height - promo_height - promo_padding
@@ -4198,7 +4198,7 @@ class Game:
         # Draw promo button background with glow
         if promo_hovering:
             # Add glow effect on hover
-            glow_rect = self.neon_slip_button_rect.inflate(20, 20)
+            glow_rect = self.neon_slip_button_rect.inflate(10, 10)
             glow_surf = pygame.Surface((glow_rect.width, glow_rect.height))
             glow_surf.set_alpha(80)
             glow_surf.fill((0, 255, 200))
@@ -4207,22 +4207,20 @@ class Game:
         pygame.draw.rect(self.screen, promo_bg, self.neon_slip_button_rect)
         pygame.draw.rect(self.screen, promo_color, self.neon_slip_button_rect, 2)
         
-        # Draw promo text - "CHECK OUT MY OTHER GAME"
-        promo_line1_text = self.font_small.render("CHECK OUT MY", True, promo_color)
-        promo_line2_text = self.font_small.render("OTHER GAME", True, promo_color)
-        promo_line1_rect = promo_line1_text.get_rect(center=(promo_x + promo_width // 2, promo_y + promo_height // 3))
-        promo_line2_rect = promo_line2_text.get_rect(center=(promo_x + promo_width // 2, promo_y + promo_height // 2))
-        self.screen.blit(promo_line1_text, promo_line1_rect)
-        self.screen.blit(promo_line2_text, promo_line2_rect)
+        # Clean text rendering with anti-aliasing
+        # Use smaller text for compact button
+        promo_small_font = pygame.font.Font(None, max(12, int(14 * self.scale_factor)))
+        promo_large_font = pygame.font.Font(None, max(14, int(18 * self.scale_factor)))
         
-        # Draw "NEON SLIP" in italics (using slant effect)
-        neon_slip_font = pygame.font.Font(None, int(24 * self.scale_factor))
-        # Create italic effect by rendering and then transforming
-        neon_text = neon_slip_font.render("NEON SLIP", True, (0, 255, 200))
-        # Skew for italic effect
-        neon_italic = pygame.transform.scale(neon_text, (int(neon_text.get_width() * 1.2), neon_text.get_height()))
-        neon_rect = neon_italic.get_rect(center=(promo_x + promo_width // 2, promo_y + promo_height * 0.75))
-        self.screen.blit(neon_italic, neon_rect)
+        # Draw "NEON SLIP" main text (clean, no transforms)
+        neon_text = promo_large_font.render("NEON SLIP", True, promo_color)
+        neon_rect = neon_text.get_rect(center=(promo_x + promo_width // 2, promo_y + promo_height // 2 - 2))
+        self.screen.blit(neon_text, neon_rect)
+        
+        # Draw small "OTHER GAME" label below
+        label_text = promo_small_font.render("other game", True, promo_color)
+        label_rect = label_text.get_rect(center=(promo_x + promo_width // 2, promo_y + promo_height - 8))
+        self.screen.blit(label_text, label_rect)
 
         # Subtle static for creepy vibe
         self.apply_creepy_static(0.15)

@@ -23,6 +23,9 @@ wheels/
 # PyInstaller
 *.spec
 
+# Executables (too large for GitHub - use Releases instead)
+*.exe
+
 # Virtual Environment
 venv/
 ENV/

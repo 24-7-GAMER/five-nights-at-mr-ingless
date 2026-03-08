@@ -25,10 +25,21 @@ namespace FiveNightsAtMrIngles.UI
 
         void Start()
         {
+            AutoDiscoverElements();
             if (nightCompletePanel != null)
                 nightCompletePanel.SetActive(false);
             if (continueButton != null)
                 continueButton.onClick.AddListener(ReturnToMenu);
+        }
+
+        void AutoDiscoverElements()
+        {
+            if (nightCompletePanel == null)
+                nightCompletePanel = gameObject;
+            if (nightCompleteImage == null)
+                nightCompleteImage = GetComponentInChildren<Image>();
+            if (nightCompleteText == null)
+                nightCompleteText = GetComponentInChildren<Text>();
         }
 
         void HandleNightWin()

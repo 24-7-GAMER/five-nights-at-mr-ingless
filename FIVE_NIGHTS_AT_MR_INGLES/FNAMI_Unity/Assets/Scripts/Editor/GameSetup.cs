@@ -5,6 +5,7 @@ using UnityEngine.UI;
 using UnityEngine.EventSystems;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 #if UNITY_POST_PROCESSING_STACK_V2
 using UnityEngine.Rendering.PostProcessing;
 #endif
@@ -186,6 +187,11 @@ namespace FiveNightsAtMrIngles.Editor
             AddComponent(tutPanel, "FiveNightsAtMrIngles.UI.TutorialController");
             tutPanel.SetActive(false);
 
+            // Wire AudioManager clips
+            var audioMgr = gameSystems.GetComponent("FiveNightsAtMrIngles.AudioManager") as Component;
+            if (audioMgr == null) audioMgr = gameSystems.GetComponents<MonoBehaviour>().FirstOrDefault(m => m.GetType().Name == "AudioManager") as Component;
+            WireAudioManager(audioMgr);
+
             if (!AssetDatabase.IsValidFolder("Assets/Scenes"))
                 AssetDatabase.CreateFolder("Assets", "Scenes");
             EditorSceneManager.SaveScene(scene, "Assets/Scenes/MainMenu.unity");
@@ -359,6 +365,15 @@ namespace FiveNightsAtMrIngles.Editor
             AddComponent(antiCheatUI, "FiveNightsAtMrIngles.UI.AntiCheatUIController");
             antiCheatUI.SetActive(false);
 
+            // Wire serialized fields AFTER all objects are created
+            // AudioManager
+            var audioMgrOff = gameSystems.GetComponents<MonoBehaviour>().FirstOrDefault(m => m.GetType().Name == "AudioManager") as Component;
+            WireAudioManager(audioMgrOff);
+
+            // CameraSystem - wire room list
+            var camSys = gameSystems.GetComponents<MonoBehaviour>().FirstOrDefault(m => m.GetType().Name == "CameraSystem") as Component;
+            WireCameraSystem(camSys);
+
             if (!AssetDatabase.IsValidFolder("Assets/Scenes"))
                 AssetDatabase.CreateFolder("Assets", "Scenes");
             EditorSceneManager.SaveScene(scene, "Assets/Scenes/Office.unity");
@@ -483,6 +498,99 @@ namespace FiveNightsAtMrIngles.Editor
                     return Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), new Vector2(0.5f, 0.5f));
             }
             return null;
+        }
+
+        static AudioClip LoadAudioClip(string name)
+        {
+            string[] paths = new string[]
+            {
+                $"Assets/Audio/SFX/{name}.ogg",
+                $"Assets/Audio/SFX/{name}.mp3",
+                $"Assets/Audio/SFX/{name}.wav",
+                $"Assets/Audio/Music/{name}.ogg",
+                $"Assets/Audio/Music/{name}.mp3",
+            };
+            foreach (var path in paths)
+            {
+                var clip = AssetDatabase.LoadAssetAtPath<AudioClip>(path);
+                if (clip != null) return clip;
+            }
+            return null;
+        }
+
+        /// <summary>Sets a serialized object field by name.</summary>
+        static void WireField(Component comp, string fieldName, Object value)
+        {
+            if (comp == null) return;
+            var so = new SerializedObject(comp);
+            var prop = so.FindProperty(fieldName);
+            if (prop != null)
+            {
+                prop.objectReferenceValue = value;
+                so.ApplyModifiedPropertiesWithoutUndo();
+            }
+        }
+
+        /// <summary>Sets a serialized array field by name.</summary>
+        static void WireFieldArray(Component comp, string fieldName, List<Object> values)
+        {
+            if (comp == null) return;
+            var so = new SerializedObject(comp);
+            var prop = so.FindProperty(fieldName);
+            if (prop == null) return;
+            prop.arraySize = values.Count;
+            for (int i = 0; i < values.Count; i++)
+                prop.GetArrayElementAtIndex(i).objectReferenceValue = values[i];
+            so.ApplyModifiedPropertiesWithoutUndo();
+        }
+
+        /// <summary>Wires all AudioManager audio clips from Assets/Audio/</summary>
+        static void WireAudioManager(Component audioManager)
+        {
+            if (audioManager == null) return;
+            WireField(audioManager, "menuMusic",        LoadAudioClip("menu_theme"));
+            WireField(audioManager, "jumpscareSFX",     LoadAudioClip("jumpscare"));
+            WireField(audioManager, "doorOpenSFX",      LoadAudioClip("door_open"));
+            WireField(audioManager, "doorCloseSFX",     LoadAudioClip("door_close"));
+            WireField(audioManager, "lightSwitchSFX",   LoadAudioClip("light_toggle"));
+            WireField(audioManager, "cameraToggleSFX",  LoadAudioClip("camera_flash"));
+            WireField(audioManager, "cameraBlipSFX",    LoadAudioClip("camera_flash"));
+            WireField(audioManager, "staticSFX",        LoadAudioClip("static_loop"));
+            WireField(audioManager, "powerOutageSFX",   LoadAudioClip("power_out"));
+            WireField(audioManager, "clockChimeSFX",    LoadAudioClip("hour_chime"));
+            WireField(audioManager, "doorKnockSFX",     LoadAudioClip("door_knock"));
+            WireField(audioManager, "doorDamageSFX",    LoadAudioClip("door_damage"));
+            WireField(audioManager, "ventCrawlSFX",     LoadAudioClip("vent_crawl"));
+
+            // Night ambience tracks (all use same ambience clip for now)
+            var ambience = LoadAudioClip("ambience");
+            if (ambience != null)
+            {
+                var ambienceList = new List<Object> { ambience, ambience, ambience, ambience, ambience };
+                WireFieldArray(audioManager, "nightAmbience", ambienceList);
+            }
+        }
+
+        /// <summary>Wires all CameraSystem rooms from Assets/Data/Rooms/</summary>
+        static void WireCameraSystem(Component cameraSystem)
+        {
+            if (cameraSystem == null) return;
+            string[] guids = AssetDatabase.FindAssets("t:ScriptableObject", new[] { "Assets/Data/Rooms" });
+            var rooms = new List<Object>();
+            foreach (var guid in guids)
+            {
+                string path = AssetDatabase.GUIDToAssetPath(guid);
+                var obj = AssetDatabase.LoadAssetAtPath<ScriptableObject>(path);
+                if (obj != null && obj.GetType().Name == "RoomData")
+                    rooms.Add(obj);
+            }
+            if (rooms.Count == 0)
+            {
+                Debug.LogWarning("No RoomData assets found! Run 'Five Nights/Create Room Data Assets' first.");
+                return;
+            }
+            WireFieldArray(cameraSystem, "allRooms", rooms);
+            Debug.Log($"  Wired {rooms.Count} rooms to CameraSystem");
         }
 
         static void CreateMenuButton(string label, Transform parent, Vector2 anchoredPos)

@@ -53,6 +53,8 @@ namespace FiveNightsAtMrIngles.UI
 
         void Start()
         {
+            AutoDiscoverElements();
+
             if (jumpscarePanel != null)
                 jumpscarePanel.SetActive(false);
 
@@ -60,6 +62,19 @@ namespace FiveNightsAtMrIngles.UI
                 deathScreenPanel.SetActive(false);
 
             SetupButtons();
+        }
+
+        void AutoDiscoverElements()
+        {
+            // The JumpscareController IS the panel, so its image is on this GameObject
+            if (jumpscarePanel == null)
+                jumpscarePanel = gameObject;
+
+            if (jumpscareImage == null)
+                jumpscareImage = GetComponentInChildren<Image>();
+
+            if (defaultJumpscareSprite == null && jumpscareImage != null)
+                defaultJumpscareSprite = jumpscareImage.sprite;
         }
         #endregion
 

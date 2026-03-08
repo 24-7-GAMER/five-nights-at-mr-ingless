@@ -59,6 +59,7 @@ namespace FiveNightsAtMrIngles.UI
 
         void Start()
         {
+            AutoDiscoverElements();
             SetupNightButtons();
             LoadSettings();
             SetupSliders();
@@ -75,7 +76,32 @@ namespace FiveNightsAtMrIngles.UI
         }
         #endregion
 
-        #region Setup
+        #region Auto-Discovery
+        /// <summary>Auto-discovers UI elements by name if not set in Inspector.</summary>
+        void AutoDiscoverElements()
+        {
+            // Auto-find night buttons by name if not assigned
+            if (nightButtons == null || nightButtons.Length < 5)
+            {
+                var buttons = new System.Collections.Generic.List<Button>();
+                var texts = new System.Collections.Generic.List<Text>();
+                for (int i = 1; i <= 5; i++)
+                {
+                    Transform t = transform.Find($"Btn_Night{i}");
+                    if (t == null) t = transform.Find($"NightButton{i}");
+                    if (t != null)
+                    {
+                        var btn = t.GetComponent<Button>();
+                        if (btn != null) buttons.Add(btn);
+                        var txt = t.GetComponentInChildren<Text>();
+                        if (txt != null) texts.Add(txt);
+                    }
+                }
+                if (buttons.Count > 0) nightButtons = buttons.ToArray();
+                if (texts.Count > 0) nightButtonTexts = texts.ToArray();
+            }
+        }
+        #endregion
         void SetupNightButtons()
         {
             if (nightButtons == null || nightButtons.Length < 5)

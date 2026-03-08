@@ -60,6 +60,8 @@ namespace FiveNightsAtMrIngles.UI
 
         void Start()
         {
+            AutoDiscoverElements();
+
             if (cameraPanel != null)
             {
                 cameraPanel.SetActive(false);
@@ -67,6 +69,32 @@ namespace FiveNightsAtMrIngles.UI
 
             SetupButtons();
             CreateMinimap();
+        }
+
+        /// <summary>Auto-discovers UI elements by searching child hierarchy by name.</summary>
+        void AutoDiscoverElements()
+        {
+            if (cameraPanel == null)
+            {
+                var t = transform.Find("CameraPanel");
+                if (t != null) cameraPanel = t.gameObject;
+            }
+            if (cameraFeedImage == null && cameraPanel != null)
+            {
+                var t = cameraPanel.transform.Find("CameraView");
+                if (t != null) cameraFeedImage = t.GetComponent<Image>();
+            }
+            if (roomNameText == null && cameraPanel != null)
+            {
+                var t = cameraPanel.transform.Find("RoomLabel");
+                if (t == null) t = cameraPanel.transform.Find("RoomNameText");
+                if (t != null) roomNameText = t.GetComponent<Text>();
+            }
+            if (minimapContainer == null && cameraPanel != null)
+            {
+                var t = cameraPanel.transform.Find("Minimap");
+                if (t != null) minimapContainer = t.GetComponent<RectTransform>();
+            }
         }
 
         void Update()

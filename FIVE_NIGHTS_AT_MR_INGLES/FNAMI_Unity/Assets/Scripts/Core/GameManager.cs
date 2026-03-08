@@ -114,6 +114,16 @@ namespace FiveNightsAtMrIngles
         {
             // Unsubscribe from events
             PowerSystem.OnPowerOutage -= HandlePowerOutage;
+            SceneManager.sceneLoaded -= OnOfficeSceneLoaded;
+        }
+
+        void OnOfficeSceneLoaded(UnityEngine.SceneManagement.Scene scene, LoadSceneMode mode)
+        {
+            SceneManager.sceneLoaded -= OnOfficeSceneLoaded;
+            if (scene.name == "Office" && currentState == GameState.Playing)
+            {
+                StartNightProgress();
+            }
         }
         #endregion
 
@@ -147,12 +157,16 @@ namespace FiveNightsAtMrIngles
                     break;
                     
                 case GameState.Playing:
-                    // Load office scene if needed
+                    // Load office scene if needed, defer StartNightProgress until scene is ready
                     if (SceneManager.GetActiveScene().name != "Office")
                     {
+                        SceneManager.sceneLoaded += OnOfficeSceneLoaded;
                         SceneManager.LoadScene("Office");
                     }
-                    StartNightProgress();
+                    else
+                    {
+                        StartNightProgress();
+                    }
                     break;
                     
                 case GameState.Paused:

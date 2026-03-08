@@ -8,7 +8,7 @@ PlayerSettings:
   companyName: 24-7-GAMER
   defaultScreenWidth: 1280
   defaultScreenHeight: 720
-  defaultIsFullScreen: 0
+  defaultIsFullScreen: 1
   defaultIsNativeMobileResolution: 0
   runInBackground: 0
   captureSingleScreen: 0
@@ -74,7 +74,7 @@ PlayerSettings:
   iosAppInBackgroundBehavior: 0
   use32BitDisplayBuffer: 1
   resizableWindow: 0
-  fullscreenMode: 3
+  fullscreenMode: 1
   visibleInBackground: 1
   allowFullscreenSwitch: 1
   graphicsJobMode: 0

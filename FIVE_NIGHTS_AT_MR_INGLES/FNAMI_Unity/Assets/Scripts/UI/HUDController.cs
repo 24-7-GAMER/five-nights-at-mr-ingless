@@ -75,6 +75,8 @@ namespace FiveNightsAtMrIngles.UI
 
         void Start()
         {
+            AutoDiscoverElements();
+
             if (controlsPanel != null)
             {
                 controlsPanel.SetActive(showControlsOnStart);
@@ -86,6 +88,31 @@ namespace FiveNightsAtMrIngles.UI
             if (GameManager.Instance != null)
             {
                 UpdateNightDisplay(GameManager.Instance.currentNight);
+            }
+        }
+
+        /// <summary>Auto-discovers UI elements by searching child hierarchy by name.</summary>
+        void AutoDiscoverElements()
+        {
+            if (timeText == null)
+            {
+                var t = transform.Find("TimeDisplay");
+                if (t != null) timeText = t.GetComponent<Text>();
+            }
+            if (powerText == null)
+            {
+                var t = transform.Find("PowerDisplay");
+                if (t != null) powerText = t.GetComponent<Text>();
+            }
+            if (nightText == null)
+            {
+                var t = transform.Find("NightDisplay");
+                if (t != null) nightText = t.GetComponent<Text>();
+            }
+            if (statusText == null)
+            {
+                var t = transform.Find("StatusText");
+                if (t != null) statusText = t.GetComponent<Text>();
             }
         }
 

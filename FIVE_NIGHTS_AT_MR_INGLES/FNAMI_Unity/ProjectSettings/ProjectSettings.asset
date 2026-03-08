@@ -29,9 +29,9 @@ PlayerSettings:
   apiCompatibilityLevel: 6
   activeInputHandler: 0
   applicationIdentifier:
-    Standalone: com.247GAMER.FiveNightsAtMrIngless
-    iPhone: com.247GAMER.FiveNightsAtMrIngless
-    tvOS: com.247GAMER.FiveNightsAtMrIngless
+    Standalone: com.247GAMER.FiveNightsAtMrIngles
+    iPhone: com.247GAMER.FiveNightsAtMrIngles
+    tvOS: com.247GAMER.FiveNightsAtMrIngles
   buildNumber:
     iPhone: 0
     tvOS: 0
@@ -78,10 +78,6 @@ PlayerSettings:
   visibleInBackground: 1
   allowFullscreenSwitch: 1
   graphicsJobMode: 0
-  defaultIsFullScreen: 1
-  defaultIsNativeMobileResolution: 1
-  companyName: 24-7-GAMER
-  productName: Five Nights at Mr Ingles's
   defaultCursor: {fileID: 0}
   cursorHotspot: {x: 0, y: 0}
   templatePackageId: com.unity.template.2d@5.0.2

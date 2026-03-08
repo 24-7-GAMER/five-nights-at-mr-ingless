@@ -42,3 +42,34 @@ mr_ingles_save.json
 # OS
 .DS_Store
 Thumbs.db
+
+# Unity
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Bb]uild/
+[Bb]uilds/
+[Ll]ogs/
+[Mm]emoryCaptures/
+[Uu]serSettings/
+*.csproj
+*.unityproj
+*.sln
+*.suo
+*.tmp
+*.user
+*.userprefs
+*.pidb
+*.booproj
+*.svd
+*.pdb
+*.mdb
+*.opendb
+*.VC.db
+crashlytics-build.properties
+*.apk
+*.aab
+*.unitypackage
+*.app
+# Unity auto-generated meta for Assets (keep these)
+# DO NOT add *.meta to gitignore for Unity projects

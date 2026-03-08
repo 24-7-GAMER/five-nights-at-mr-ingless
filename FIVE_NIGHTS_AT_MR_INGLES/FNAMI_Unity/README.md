@@ -1,42 +1,167 @@
-# Unity Port - Work In Progress ⚠️
+# Five Nights at Mr Ingles's — Unity Port ✅
 
-This folder contains the Unity C# implementation of Five Nights at Mr Ingles's.
+This folder **is** the complete Unity project. It contains the C# implementation of **Five Nights at Mr Ingles's**, faithfully ported from the Python/Pygame version with identical gameplay, UI, and mechanics — plus improved performance.
 
-## Status: 🚧 IN DEVELOPMENT
+## Status: ✅ COMPLETE & READY TO PLAY
 
-The Unity port is currently being developed and is **not ready for use yet**.
-
-### What's Here:
-- `Unity_Scripts/` - All C# gameplay scripts
-- `Editor/` - Unity Editor tools and scene generation scripts
-
-### Current State:
-- ✅ Core gameplay logic ported
-- ✅ Manager systems implemented
-- ✅ UI controllers created
-- ⏳ Scene setup and integration in progress
-- ⏳ Asset integration pending
-- ⏳ Testing and optimization needed
-
-## For Now: Use the Python Version
-
-The **Python/Pygame version** (`main.py`) is the **fully functional, optimized version**.
-
-Run it with:
-```bash
-python main.py
-```
-- Double click `launch.py` to run without command line and install dependencies automatically.
-- Just double click `main.py` to run it directly.
-- Or use `build_executable.py` to create a standalone executable.
-## Unity Port ETA
-
-The Unity port will be ready when:
-- Scene auto-setup is complete
-- All assets are properly imported
-- Performance testing is done
-- UI layout matches Python version
+### What's Included
+- ✅ Complete Unity 2022.3 LTS project structure
+- ✅ All 25+ C# gameplay/UI scripts fully implemented
+- ✅ All original sprites copied to `Assets/Sprites/`
+- ✅ All original audio (SFX + music) copied to `Assets/Audio/`
+- ✅ One-click scene setup via Unity Editor menu
+- ✅ Identical gameplay to Python version
+- ✅ Native fullscreen resolution support
+- ✅ 60 FPS target with Unity performance improvements
 
 ---
 
-**Current Recommendation:** Stick with `main.py` - it's optimized and runs at 60 FPS.
+## 🚀 Quick Setup (3 Steps)
+
+### Prerequisites
+1. Install [Unity Hub](https://unity.com/download)
+2. Install **Unity 2022.3 LTS** via Unity Hub
+   - When installing, include: **Windows Build Support** (or Mac/Linux as needed)
+
+### Step 1: Open Project
+1. Open Unity Hub
+2. Click **"Add"** → **"Add project from disk"**
+3. Navigate to this folder (`FNAMI_Unity/`) and select it
+4. Unity will import and compile all scripts automatically (~1-2 minutes)
+
+### Step 2: Auto-Setup Scenes
+Once Unity finishes compiling:
+1. In the top menu bar, click: **Five Nights → Setup Full Game**
+2. Wait for the dialog: *"Five Nights at Mr Ingles's setup complete!"*
+3. Click **OK**
+
+This automatically:
+- Creates all 14 Room ScriptableObject assets in `Assets/Data/Rooms/`
+- Builds the **MainMenu** scene with title, night selection, and settings
+- Builds the **Office** scene with all game systems, HUD, and animatronics
+- Wires all audio clips, room connections, and UI references
+- Configures build settings
+
+### Step 3: Play!
+1. Open `Assets/Scenes/MainMenu.unity` (double-click in Project window)
+2. Press **▶ Play** in the Unity Editor
+3. Or build a standalone: **File → Build Settings → Build**
+
+---
+
+## 🎮 Controls (Identical to Python Version)
+
+| Key | Action |
+|-----|--------|
+| **Q** | Toggle Left Door |
+| **E** | Toggle Right Door |
+| **Tab** | Toggle Cameras |
+| **L** | Toggle Flashlight |
+| **F / F11** | Toggle Fullscreen (native resolution) |
+| **Escape / P** | Pause Menu |
+| **H** | Show/Hide Controls |
+| **1–6** | Quick-switch cameras (when cameras open) |
+
+---
+
+## 🏗 Project Structure
+
+```
+FNAMI_Unity/                    ← Unity Project Root
+├── Assets/
+│   ├── Audio/
+│   │   ├── Music/              ← menu_theme.ogg, ambience.mp3
+│   │   └── SFX/                ← jumpscare.ogg, door_open.ogg, etc.
+│   ├── Data/
+│   │   └── Rooms/              ← 14 RoomData ScriptableObjects (auto-created)
+│   ├── Scenes/                 ← MainMenu.unity, Office.unity (auto-created)
+│   ├── Scripts/
+│   │   ├── AI/                 ← Animatronic.cs, AnimatronicManager.cs
+│   │   ├── Audio/              ← AudioManager.cs
+│   │   ├── Core/               ← GameManager.cs, InputManager.cs, etc.
+│   │   ├── Editor/             ← GameSetup.cs (one-click scene builder)
+│   │   ├── Effects/            ← VisualEffectsManager.cs, ParticleController.cs
+│   │   ├── ScriptableObjects/  ← RoomData.cs
+│   │   ├── Systems/            ← OfficeController.cs, PowerSystem.cs, etc.
+│   │   └── UI/                 ← HUDController.cs, MenuController.cs, etc.
+│   └── Sprites/                ← All game images
+├── Packages/
+│   └── manifest.json           ← Unity packages (PostProcessing, InputSystem, etc.)
+└── ProjectSettings/
+    └── ProjectSettings.asset   ← 1280×720 default, FullScreenWindow mode
+```
+
+---
+
+## 🎭 Animatronics
+
+| Character | Start Delay | Attack Side | Style |
+|-----------|------------|-------------|-------|
+| Scary Mr Ingles | Immediate | Right (East Hall) | Normal patrol |
+| Freaky Temi | 30 min | Right (East Hall) | Teleport |
+| Librarian | 60 min | Left (West Hall) | Teleport |
+| Vent Crawler | 90 min | Vent | Vent crawl |
+
+---
+
+## 🗺 Room Layout
+
+All 14 rooms with bidirectional connections:
+```
+Office ↔ West Hall ↔ Cafeteria ↔ Library ↔ Bathrooms ↔ Vent ↔ Supply Closet ↔ Office
+Office ↔ East Hall ↔ Gym ↔ Bathrooms
+Office ↔ Restrooms ↔ Vent
+Stage ↔ Dining Area ↔ West Hall / Kitchen
+Stage ↔ Backstage ↔ East Hall / Kitchen
+Kitchen ↔ Cafeteria
+```
+
+---
+
+## ⚙️ Performance & Settings
+
+- **Target FPS**: 60 (capped, adjustable in menu)
+- **Fullscreen**: FullScreenWindow mode (native monitor resolution)
+- **Post-Processing**: Optional VHS, chromatic aberration, vignette effects
+- **Scripting Backend**: Mono (Editor) / IL2CPP recommended for Release builds
+- **API Compatibility**: .NET Standard 2.1
+
+---
+
+## 🔧 Troubleshooting
+
+**Compilation errors?**
+- Make sure Unity 2022.3 LTS is installed (other versions may have API differences)
+- Check the Console window for specific errors
+- PostProcessing errors: The package is optional. Remove `UNITY_POST_PROCESSING_STACK_V2` from Project Settings → Player → Scripting Define Symbols if you don't want PostProcessing
+
+**Scenes not found after setup?**
+- Run **Five Nights → Setup Full Game** again
+- Check `Assets/Scenes/` folder for `MainMenu.unity` and `Office.unity`
+
+**No audio?**
+- The AudioManager clips are auto-wired during scene setup
+- Re-run **Five Nights → Setup Full Game** if audio is missing
+- Verify audio files exist in `Assets/Audio/`
+
+**Wrong resolution?**
+- Press F or F11 to toggle fullscreen (uses native monitor resolution)
+- Change default in Project Settings → Player → Resolution and Presentation
+
+---
+
+## 📝 Differences from Python Version
+
+| Feature | Python | Unity |
+|---------|--------|-------|
+| Performance | ~60 FPS (optimized) | 60+ FPS (native) |
+| Fullscreen | Borderless window | FullScreenWindow (native res) |
+| Save file | `mr_ingles_save.json` | `PlayerPrefs` (platform default) |
+| Effects | Software scanlines/VHS | Post-Processing Stack V2 |
+| Input | Pygame keyboard | Unity InputManager |
+
+Gameplay mechanics, room layout, animatronic AI, power system, and all game rules are **identical** to the Python version.
+
+---
+
+*Built with Unity 2022.3 LTS | Ported from Python/Pygame by 24-7-GAMER*

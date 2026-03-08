@@ -1,0 +1,84 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!129 &1
+PlayerSettings:
+  m_ObjectHideFlags: 0
+  serializedVersion: 27
+  productName: Five Nights at Mr Ingles's
+  companyName: 24-7-GAMER
+  defaultScreenWidth: 1280
+  defaultScreenHeight: 720
+  defaultIsFullScreen: 1
+  defaultIsNativeMobileResolution: 0
+  runInBackground: 0
+  captureSingleScreen: 0
+  muteOtherAudioSources: 0
+  stripUnusedMeshComponents: 1
+  bakeCollisionMeshes: 0
+  keepLoadedShadersAlive: 0
+  preloadedAssets: []
+  macRetinaSupport: 1
+  m_BuildTargetIcons: []
+  m_BuildTargetPlatformIcons: []
+  m_BuildTargetBatching:
+  - {}
+  m_BuildTargetGraphicsAPIs:
+  - m_BuildTarget: Standalone
+    m_APIs: 020000000b000000
+    m_Automatic: 0
+  apiCompatibilityLevel: 6
+  activeInputHandler: 0
+  applicationIdentifier:
+    Standalone: com.247GAMER.FiveNightsAtMrIngles
+    iPhone: com.247GAMER.FiveNightsAtMrIngles
+    tvOS: com.247GAMER.FiveNightsAtMrIngles
+  buildNumber:
+    iPhone: 0
+    tvOS: 0
+    Standalone: 0
+  AndroidMinSdkVersion: 22
+  AndroidTargetSdkVersion: 31
+  AndroidPreferredInstallLocation: 1
+  stripEngineCode: 1
+  scriptingDefineSymbols:
+    1: UNITY_POST_PROCESSING_STACK_V2
+  scriptingRuntimeVersion: 1
+  gcIncremental: 1
+  assemblyVersionValidation: 1
+  renderingPath: 1
+  mobileRenderingPath: 1
+  activeColorSpace: 0
+  MTRendering: 1
+  additionalShaderChannels: 0
+  m_SplashScreenBackgroundColor: {r: 0.13725491, g: 0.12156863, b: 0.1254902, a: 1}
+  m_ShowUnitySplashScreen: 0
+  m_ShowUnitySplashLogo: 0
+  m_SplashScreenOverlayOpacity: 1
+  m_SplashScreenAnimation: 1
+  m_SplashScreenLogoStyle: 1
+  m_SplashScreenDrawMode: 0
+  m_SplashScreenBackgroundAnimationZoom: 1
+  m_SplashScreenLogoAnimationZoom: 1
+  m_SplashScreenLogos: []
+  defaultScreenWidthWeb: 960
+  defaultScreenHeightWeb: 600
+  m_StereoRenderingPath: 0
+  m_ActiveColorSpace: 0
+  m_MTRendering: 1
+  mipStripping: 0
+  numberOfMipsStripped: 0
+  m_StackTraceTypes: 010000000100000001000000010000000100000001000000
+  iosShowActivityIndicatorOnLoading: -1
+  androidShowActivityIndicatorOnLoading: -1
+  displayResolutionDialog: 0
+  iosAppInBackgroundBehavior: 0
+  use32BitDisplayBuffer: 1
+  resizableWindow: 0
+  fullscreenMode: 1
+  visibleInBackground: 1
+  allowFullscreenSwitch: 1
+  graphicsJobMode: 0
+  defaultCursor: {fileID: 0}
+  cursorHotspot: {x: 0, y: 0}
+  templatePackageId: com.unity.template.2d@5.0.2
+  templateDefaultScene: Assets/Scenes/SampleScene.unity

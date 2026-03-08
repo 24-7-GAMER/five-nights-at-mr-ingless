@@ -102,6 +102,8 @@ namespace FiveNightsAtMrIngles.UI
             }
         }
         #endregion
+
+        #region Setup
         void SetupNightButtons()
         {
             if (nightButtons == null || nightButtons.Length < 5)

@@ -117,6 +117,8 @@ namespace FiveNightsAtMrIngles
         {
             isPowerOut = true;
             emergencyTimer = 0f;
+            // Pre-compute a random jumpscare time (45s emergency + 5-20s for animatronic approach)
+            _jumpscareTime = 45f + UnityEngine.Random.Range(5f, 20f);
             
             Debug.LogWarning("POWER OUTAGE!");
             OnPowerOutage?.Invoke();
@@ -132,13 +134,15 @@ namespace FiveNightsAtMrIngles
         {
             emergencyTimer += Time.deltaTime;
             
-            // After random time (5-20 seconds), trigger jumpscare
-            float jumpscareTime = UnityEngine.Random.Range(5f, 20f);
-            if (emergencyTimer >= jumpscareTime)
+            // Trigger jumpscare after pre-computed delay (not random every frame)
+            if (emergencyTimer >= _jumpscareTime)
             {
                 GameManager.Instance?.TriggerJumpscare("Mr Ingles (Power Outage)");
+                _jumpscareTime = float.MaxValue; // prevent repeated triggers
             }
         }
+
+        private float _jumpscareTime = 60f;
         #endregion
 
         #region Public Methods
@@ -148,6 +152,7 @@ namespace FiveNightsAtMrIngles
             isPowerOut = false;
             emergencyTimer = 0f;
             reservePower = 0f;
+            _jumpscareTime = float.MaxValue;
             
             OnPowerChanged?.Invoke(100f);
             Debug.Log("Power system reset.");

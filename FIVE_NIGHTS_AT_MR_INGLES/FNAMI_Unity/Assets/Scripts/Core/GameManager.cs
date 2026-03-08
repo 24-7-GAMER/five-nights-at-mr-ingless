@@ -308,8 +308,7 @@ namespace FiveNightsAtMrIngles
             OnGameOver?.Invoke();
             ChangeState(GameState.Jumpscare);
             
-            // Play jumpscare animation/sound
-            // TODO: Implement jumpscare system
+            // JumpscareController listens to OnGameOver and handles the visual/audio sequence
         }
 
         void HandlePowerOutage()

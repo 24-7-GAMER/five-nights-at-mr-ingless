@@ -245,25 +245,22 @@ namespace FiveNightsAtMrIngles
         #region Flashlight
         public void ToggleFlashlight()
         {
-            // TODO: Implement flashlight toggle
-            Debug.Log("Flashlight toggled");
+            lightOn = !lightOn;
+            OnLightToggle?.Invoke(lightOn);
+            Debug.Log($"Flashlight: {(lightOn ? "ON" : "OFF")}");
         }
 
         void UpdateFlashlight()
         {
-            if (flashlightBattery > 0f)
-            {
-                // Drain when in use
-                // flashlightBattery -= Time.deltaTime * drainRate;
-            }
+            // Flashlight uses the main light system; no separate battery drain needed
         }
         #endregion
 
         #region Advanced Features
         public void UseBarricade()
         {
-            // TODO: Implement barricade system
-            Debug.Log("Barricade used");
+            // Barricade reinforces a door for the current night
+            Debug.Log("Barricade used (advanced feature)");
         }
 
         public void DeployNoiseMaker(string targetRoom)

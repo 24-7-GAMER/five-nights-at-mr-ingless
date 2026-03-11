@@ -43,7 +43,6 @@ namespace FiveNightsAtMrIngles.UI
 
         #region Private Fields
         private float statusTimer = 0f;
-        private string pendingStatus = "";
         #endregion
 
         #region Unity Lifecycle

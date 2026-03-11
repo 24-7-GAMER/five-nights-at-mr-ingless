@@ -245,7 +245,7 @@ namespace FiveNightsAtMrIngles.UI
 
             // Get all animatronic locations
             var animatronicRooms = new HashSet<RoomData>();
-            var animatronics = FindObjectsOfType<Animatronic>();
+            var animatronics = FindObjectsByType<Animatronic>(FindObjectsSortMode.None);
             foreach (var animatronic in animatronics)
             {
                 if (animatronic.currentRoom != null && animatronic.isActive)

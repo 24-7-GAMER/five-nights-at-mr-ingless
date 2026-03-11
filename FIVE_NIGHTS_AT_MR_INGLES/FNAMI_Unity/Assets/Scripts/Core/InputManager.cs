@@ -166,7 +166,7 @@ namespace FiveNightsAtMrIngles
             if (Input.GetKeyDown(controlsKey))
             {
                 // Toggle controls overlay
-                var hud = FindObjectOfType<FiveNightsAtMrIngles.UI.HUDController>();
+                var hud = FindFirstObjectByType<FiveNightsAtMrIngles.UI.HUDController>();
                 if (hud != null)
                 {
                     hud.ToggleControls();
@@ -243,7 +243,7 @@ namespace FiveNightsAtMrIngles
             // Skip tutorial
             if (Input.GetKeyDown(KeyCode.Space))
             {
-                var tutorial = FindObjectOfType<FiveNightsAtMrIngles.UI.TutorialController>();
+                var tutorial = FindFirstObjectByType<FiveNightsAtMrIngles.UI.TutorialController>();
                 if (tutorial != null)
                 {
                     tutorial.SkipTutorial();

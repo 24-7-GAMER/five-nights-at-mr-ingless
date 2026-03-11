@@ -5,7 +5,7 @@ This folder **is** the complete Unity project. It contains the C# implementation
 ## Status: ✅ COMPLETE & READY TO PLAY
 
 ### What's Included
-- ✅ Complete Unity 2022.3 LTS project structure
+- ✅ Complete Unity project structure (compatible with Unity 6000.0.62f1 and other versions)
 - ✅ All 25+ C# gameplay/UI scripts fully implemented
 - ✅ All original sprites copied to `Assets/Sprites/`
 - ✅ All original audio (SFX + music) copied to `Assets/Audio/`
@@ -20,8 +20,9 @@ This folder **is** the complete Unity project. It contains the C# implementation
 
 ### Prerequisites
 1. Install [Unity Hub](https://unity.com/download)
-2. Install **Unity 2022.3 LTS** via Unity Hub
+2. Install **Unity 6000.0.62f1** (or a compatible version) via Unity Hub
    - When installing, include: **Windows Build Support** (or Mac/Linux as needed)
+   - The project targets Unity 6000.0.62f1 but should open without issues in other Unity 6 and Unity 2022.3 LTS releases
 
 ### Step 1: Open Project
 1. Open Unity Hub
@@ -131,7 +132,7 @@ Kitchen ↔ Cafeteria
 ## 🔧 Troubleshooting
 
 **Compilation errors?**
-- Make sure Unity 2022.3 LTS is installed (other versions may have API differences)
+- Make sure a compatible Unity version is installed (Unity 6000.0.62f1 or Unity 2022.3 LTS recommended)
 - Check the Console window for specific errors
 - PostProcessing errors: The package is optional. Remove `UNITY_POST_PROCESSING_STACK_V2` from Project Settings → Player → Scripting Define Symbols if you don't want PostProcessing
 
@@ -164,4 +165,4 @@ Gameplay mechanics, room layout, animatronic AI, power system, and all game rule
 
 ---
 
-*Built with Unity 2022.3 LTS | Ported from Python/Pygame by 24-7-GAMER*
+*Built with Unity 6000.0.62f1 | Compatible with Unity 6 and Unity 2022.3 LTS | Ported from Python/Pygame by 24-7-GAMER*

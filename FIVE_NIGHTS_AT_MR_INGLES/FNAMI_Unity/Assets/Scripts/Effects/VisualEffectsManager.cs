@@ -84,7 +84,7 @@ namespace FiveNightsAtMrIngles.Effects
 #if UNITY_POST_PROCESSING_STACK_V2
             if (postProcessVolume == null)
             {
-                postProcessVolume = FindObjectOfType<PostProcessVolume>();
+                postProcessVolume = FindFirstObjectByType<PostProcessVolume>();
 
                 if (postProcessVolume == null)
                 {

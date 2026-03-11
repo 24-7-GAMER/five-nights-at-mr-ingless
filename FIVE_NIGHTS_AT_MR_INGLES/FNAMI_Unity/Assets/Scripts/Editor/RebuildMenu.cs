@@ -25,7 +25,7 @@ namespace FiveNightsAtMrIngles.Editor
         static void Rebuild()
         {
             // Find or create Canvas
-            Canvas canvas = FindObjectOfType<Canvas>();
+            Canvas canvas = FindFirstObjectByType<Canvas>();
             if (canvas == null)
             {
                 Debug.LogError("Canvas not found!");

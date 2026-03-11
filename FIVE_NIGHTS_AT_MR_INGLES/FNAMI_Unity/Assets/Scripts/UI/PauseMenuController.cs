@@ -27,7 +27,9 @@ namespace FiveNightsAtMrIngles.UI
         #endregion
 
         #region Private Fields
+#pragma warning disable CS0414 // Field is assigned but its value is never used
         private bool isPaused = false;
+#pragma warning restore CS0414
         #endregion
 
         #region Unity Lifecycle

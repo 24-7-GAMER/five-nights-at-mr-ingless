@@ -116,7 +116,9 @@ namespace FiveNightsAtMrIngles
         #region Events
         public static event Action<Animatronic, RoomData> OnAnimatronicMove;
         public static event Action<Animatronic> OnAnimatronicAttack;
+#pragma warning disable CS0067 // Event is never used
         public static event Action<Animatronic, RoomData> OnAnimatronicSpotted;
+#pragma warning restore CS0067
         #endregion
 
         #region Initialization

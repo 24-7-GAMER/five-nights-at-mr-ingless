@@ -76,7 +76,7 @@ namespace FiveNightsAtMrIngles
         void DiscoverAnimatronics()
         {
             // Find all animatronics in scene
-            Animatronic[] foundAnimatronics = FindObjectsOfType<Animatronic>();
+            Animatronic[] foundAnimatronics = FindObjectsByType<Animatronic>(FindObjectsSortMode.None);
 
             animatronics.Clear();
             animatronics.AddRange(foundAnimatronics);

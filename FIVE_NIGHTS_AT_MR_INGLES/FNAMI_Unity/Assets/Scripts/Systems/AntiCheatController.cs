@@ -115,7 +115,7 @@ namespace FiveNightsAtMrIngles
                         OfficeController.Instance.doorRightHealth = Mathf.Max(0f, OfficeController.Instance.doorRightHealth - spamDoorDamage);
                 }
 
-                var hud = FindObjectOfType<FiveNightsAtMrIngles.UI.HUDController>();
+                var hud = FindFirstObjectByType<FiveNightsAtMrIngles.UI.HUDController>();
                 if (hud != null)
                 {
                     hud.ShowStatus("Door mechanism stressed! Extra power drain!", 3f);

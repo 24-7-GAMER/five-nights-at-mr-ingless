@@ -48,7 +48,9 @@ namespace FiveNightsAtMrIngles
         #region Events
         public static event Action OnPowerOutage;
         public static event Action<float> OnPowerChanged; // Sends current power %
+#pragma warning disable CS0067 // Event is never used
         public static event Action OnPowerRestored;
+#pragma warning restore CS0067
         #endregion
 
         #region Unity Lifecycle

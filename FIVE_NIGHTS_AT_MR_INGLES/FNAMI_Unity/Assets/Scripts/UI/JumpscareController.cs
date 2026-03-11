@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.UI;
+using System;
 using System.Collections;
 using FiveNightsAtMrIngles;
 
@@ -33,6 +34,10 @@ namespace FiveNightsAtMrIngles.UI
         [Header("Jumpscare Sprites")]
         public Sprite defaultJumpscareSprite;
         // Add specific sprites for each animatronic if available
+        #endregion
+
+        #region Events
+        public static event Action<string> OnJumpscareComplete;
         #endregion
 
         #region Private Fields
@@ -192,6 +197,9 @@ namespace FiveNightsAtMrIngles.UI
 
             // Show death screen
             ShowDeathScreen();
+
+            // Notify listeners that the jumpscare sequence is complete
+            OnJumpscareComplete?.Invoke(killerName);
 
             isPlaying = false;
         }

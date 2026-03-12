@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
 """
+Greetings! This is the main game file for "Five Nights at Mr Ingles's" - a fan-made tribute to the FNAF series with a unique twist. This project was developed by Ali Imran in 2025 as a passion project to create a fresh take on the classic survival horror formula.
+I have no idea why I did this to myself because it took so long... but I hope you enjoy playing it as much as I enjoyed making it!
+
+
 Five Nights at Mr Ingles's (Game Engine - Pygame)
 LUA -> PYTHON PORT (this took way too long)
 

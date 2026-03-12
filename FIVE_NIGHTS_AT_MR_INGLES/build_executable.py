@@ -48,8 +48,11 @@ def main():
         script_dir = os.path.dirname(os.path.abspath(__file__))
         os.chdir(script_dir)
 
-        # Use safe name without apostrophe to avoid Windows permission issues
-        safe_name = "Five Nights At Mr Ingles"
+        # Use deterministic executable naming/path to avoid accidental root-level binaries
+        safe_name = "FiveNightsAtMrIngles"
+        dist_dir = "dist"
+        build_dir = "build"
+        spec_dir = "build"
         data_sep = ";" if os.name == "nt" else ":"
         
         print("Five Nights at Mr Ingles's - Build Tool")
@@ -141,6 +144,9 @@ def main():
             "--onefile",                    # Single executable file
             "--windowed",                   # No console window (GUI app)
             "--name", safe_name,             # Safe output name for .spec generation
+            "--distpath", dist_dir,          # Always output executable to dist/
+            "--workpath", build_dir,         # Keep build artifacts in build/
+            "--specpath", spec_dir,          # Keep .spec files in build/
             "--add-data", f"assets{data_sep}assets",  # Include assets folder
             "--icon", icon_path,            # Use title.png as icon
             "--clean",                      # Clean PyInstaller cache
@@ -211,7 +217,7 @@ def main():
         
         # Handle both Windows (.exe) and Linux/Mac (no extension) executables
         exe_ext = ".exe" if os.name == "nt" else ""
-        exe_path = os.path.join("dist", f"{safe_name}{exe_ext}")
+        exe_path = os.path.join(dist_dir, f"{safe_name}{exe_ext}")
         
         if os.path.exists(exe_path):
             size_mb = os.path.getsize(exe_path) / (1024 * 1024)

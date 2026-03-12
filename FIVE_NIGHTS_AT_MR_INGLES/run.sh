@@ -5,6 +5,12 @@
 
 cd "$(dirname "$0")" || exit 1
 
+if [ -x "dist/FiveNightsAtMrIngles" ]; then
+    echo "Launching built executable from dist/FiveNightsAtMrIngles"
+    ./dist/FiveNightsAtMrIngles
+    exit $?
+fi
+
 # Try to find python3, then python
 if command -v python3 &> /dev/null; then
     python3 launch.py

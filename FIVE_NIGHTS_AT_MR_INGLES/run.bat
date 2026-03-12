@@ -14,5 +14,10 @@ if %errorlevel% neq 0 (
 )
 
 echo Starting Five Nights at Mr Ingles's...
-python launch.py
+if exist "dist\FiveNightsAtMrIngles.exe" (
+    echo Launching built executable from dist\FiveNightsAtMrIngles.exe
+    "dist\FiveNightsAtMrIngles.exe"
+) else (
+    python launch.py
+)
 pause

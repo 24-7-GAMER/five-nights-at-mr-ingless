@@ -2,7 +2,10 @@
 """
 Greetings! This is the main game file for "Five Nights at Mr Ingles's" - a fan-made tribute to the FNAF series with a unique twist. This project was developed by Ali Imran in 2025 as a passion project to create a fresh take on the classic survival horror formula.
 I have no idea why I did this to myself because it took so long... but I hope you enjoy playing it as much as I enjoyed making it!
-
+For any nerds like me here, I organised all the code, so PLEASE FEEL FREE TO MESS AROUND and add stuff! It's why I made it open-source!
+I originally planned to make the game in Lua after my friend told me how it was made for games. But I never understood the weird syntax and stuff in it compared to Python.
+So I then switched, and rewrote the entire game in Python.
+I would NEVER have got through the intense torture that was making this game without GitHub Copilot Code Review, so to all at Microslop, I seriously salute you.
 
 Five Nights at Mr Ingles's (Game Engine - Pygame)
 LUA -> PYTHON PORT (this took way too long)

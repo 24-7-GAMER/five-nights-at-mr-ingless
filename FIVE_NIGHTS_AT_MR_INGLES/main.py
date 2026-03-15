@@ -1278,11 +1278,18 @@ class Game:
     def scale_mouse_pos(self, pos):
         """Scale mouse position from window coordinates to game coordinates"""
         mx, my = pos
-        if self.native_width <= 0 or self.native_height <= 0:
+        if self.native_width <= 0 or self.native_height <= 0 or self.scale_factor <= 0:
             return (0, 0)
-        # Scale from display resolution to 720p game resolution
-        game_x = mx / self.scale_factor
-        game_y = my / self.scale_factor
+        # Calculate the scaled game surface dimensions (must match scale_and_blit_to_screen)
+        scaled_width = int(WINDOW_WIDTH * self.scale_factor)
+        scaled_height = int(WINDOW_HEIGHT * self.scale_factor)
+        # Calculate the centering offset (black bar offset when aspect ratios don't match)
+        # Must mirror the centering logic in scale_and_blit_to_screen
+        offset_x = self.native_width // 2 - scaled_width // 2
+        offset_y = self.native_height // 2 - scaled_height // 2
+        # Remove the centering offset, then scale down to 720p game coordinates
+        game_x = (mx - offset_x) / self.scale_factor
+        game_y = (my - offset_y) / self.scale_factor
         return (game_x, game_y)
     
     def scale_and_blit_to_screen(self):
@@ -2188,16 +2195,8 @@ class Game:
         if self.office.cams_open or self.game_state.state != "playing":
             return
         
-        # Get current mouse position
-        mouse_x, mouse_y = pygame.mouse.get_pos()
-        
-        # Scale mouse position from window coordinates to game coordinates
-        # Validate window dimensions to prevent division by zero
-        if self.window_width > 0 and self.window_height > 0:
-            mouse_x = mouse_x * (self.game_state.width / self.window_width)
-            mouse_y = mouse_y * (self.game_state.height / self.window_height)
-        else:
-            return  # Skip panning if window dimensions are invalid
+        # Get current mouse position and convert to game coordinates
+        mouse_x, mouse_y = self.scale_mouse_pos(pygame.mouse.get_pos())
         
         # Calculate target camera offset based on mouse position
         # Maximum offset is the extra space available for panning (20% with 1.2x zoom)
@@ -4165,10 +4164,7 @@ class Game:
         self.menu_x_button_rect = pygame.Rect(x_button_x, x_button_y, x_button_size, x_button_size)
         
         # X button hover effect
-        mouse_pos = pygame.mouse.get_pos()
-        # Convert mouse position from display to 720p game space
-        game_mouse_x = mouse_pos[0] / self.scale_factor
-        game_mouse_y = mouse_pos[1] / self.scale_factor
+        game_mouse_x, game_mouse_y = self.scale_mouse_pos(pygame.mouse.get_pos())
         is_hovering = self.menu_x_button_rect.collidepoint(game_mouse_x, game_mouse_y)
         x_button_color = (255, 100, 100) if is_hovering else (200, 200, 200)
         x_button_bg = (80, 20, 20) if is_hovering else (40, 40, 60)

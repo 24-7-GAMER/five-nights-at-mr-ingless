@@ -107,6 +107,10 @@ namespace FiveNightsAtMrIngles
         private float soundSensitivity;
         private float cameraAwareness;
 
+        // Throttle UpdateAdaptiveAggression to avoid recalculating every frame
+        private float aggressionUpdateTimer = 0f;
+        private const float AggressionUpdateInterval = 0.5f;
+
         private System.Random rng;
         #endregion
 
@@ -183,8 +187,13 @@ namespace FiveNightsAtMrIngles
                 moodTimer = 0f;
             }
             
-            // Update adaptive aggression based on player actions
-            UpdateAdaptiveAggression();
+            // Throttle adaptive aggression recalculation (0.5 s is more than precise enough)
+            aggressionUpdateTimer += dt;
+            if (aggressionUpdateTimer >= AggressionUpdateInterval)
+            {
+                aggressionUpdateTimer = 0f;
+                UpdateAdaptiveAggression();
+            }
             
             // Handle retreat state
             if (retreatTimer > 0f)
@@ -348,10 +357,7 @@ namespace FiveNightsAtMrIngles
 
         void MoveTo(RoomData newRoom)
         {
-            RoomData previousRoom = currentRoom;
             currentRoom = newRoom;
-            
-            Debug.Log($"{characterName} moved: {previousRoom?.roomName} → {newRoom.roomName}");
             
             OnAnimatronicMove?.Invoke(this, newRoom);
             
@@ -360,7 +366,6 @@ namespace FiveNightsAtMrIngles
             {
                 isInHallway = true;
                 hallwayTimer = 0f;
-                Debug.Log($"{characterName} is in the {(attackFromLeft ? "left" : "right")} hallway!");
             }
             else
             {
@@ -510,6 +515,7 @@ namespace FiveNightsAtMrIngles
             huntingTimer = 0f;
             retreatTimer = 0f;
             blockCount = 0;
+            aggressionUpdateTimer = 0f;
             currentMood = AnimatronicMood.Neutral;
             
             Debug.Log($"{characterName} reset to starting position.");

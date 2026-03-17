@@ -39,6 +39,8 @@ namespace FiveNightsAtMrIngles
 
         #region Private Fields
         private Dictionary<RoomData, List<Animatronic>> roomOccupancy = new Dictionary<RoomData, List<Animatronic>>();
+        // Reusable buffer for GetNearbyAnimatronics() – avoids per-frame heap allocations
+        private readonly List<Animatronic> _nearbyBuffer = new List<Animatronic>();
         #endregion
 
         #region Unity Lifecycle
@@ -112,9 +114,6 @@ namespace FiveNightsAtMrIngles
         void HandleAnimatronicMove(Animatronic animatronic, RoomData newRoom)
         {
             UpdateRoomOccupancy();
-
-            // Log movement for debugging
-            Debug.Log($"[AnimatronicManager] {animatronic.characterName} → {newRoom.roomName}");
         }
         #endregion
 
@@ -169,7 +168,7 @@ namespace FiveNightsAtMrIngles
                     continue;
 
                 // Find nearby animatronics
-                List<Animatronic> nearbyAnimatronics = GetNearbyAnimatronics(animatronic, coordinationRange);
+                IReadOnlyList<Animatronic> nearbyAnimatronics = GetNearbyAnimatronics(animatronic, coordinationRange);
 
                 if (nearbyAnimatronics.Count > 0)
                 {
@@ -179,12 +178,12 @@ namespace FiveNightsAtMrIngles
             }
         }
 
-        List<Animatronic> GetNearbyAnimatronics(Animatronic target, float range)
+        IReadOnlyList<Animatronic> GetNearbyAnimatronics(Animatronic target, float range)
         {
-            List<Animatronic> nearby = new List<Animatronic>();
+            _nearbyBuffer.Clear();
 
             if (target.currentRoom == null)
-                return nearby;
+                return _nearbyBuffer;
 
             Vector2 targetPos = new Vector2(target.currentRoom.minimapX, target.currentRoom.minimapY);
 
@@ -198,14 +197,14 @@ namespace FiveNightsAtMrIngles
 
                 if (distance <= range)
                 {
-                    nearby.Add(other);
+                    _nearbyBuffer.Add(other);
                 }
             }
 
-            return nearby;
+            return _nearbyBuffer;
         }
 
-        void HandleTeamCoordination(Animatronic leader, List<Animatronic> team)
+        void HandleTeamCoordination(Animatronic leader, IReadOnlyList<Animatronic> team)
         {
             // Example: If multiple animatronics are near office, coordinate attack
             RoomData office = CameraSystem.Instance?.GetRoomByName("Office");

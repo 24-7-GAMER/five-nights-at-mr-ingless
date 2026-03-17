@@ -103,8 +103,13 @@ namespace FiveNightsAtMrIngles
             currentPower -= totalDrain * Time.deltaTime;
             currentPower = Mathf.Max(0f, currentPower);
             
-            // Notify listeners
-            OnPowerChanged?.Invoke(GetPowerPercentage());
+            // Throttle the event: only fire when power changes by at least the threshold
+            float powerPct = GetPowerPercentage();
+            if (Mathf.Abs(powerPct - _lastPowerEventPercent) >= PowerEventThreshold)
+            {
+                _lastPowerEventPercent = powerPct;
+                OnPowerChanged?.Invoke(powerPct);
+            }
             
             // Check for power outage
             if (currentPower <= 0f && !isPowerOut)
@@ -139,6 +144,9 @@ namespace FiveNightsAtMrIngles
                 GameManager.Instance?.TriggerJumpscare("Mr Ingles (Power Outage)");
             }
         }
+        // Throttle OnPowerChanged: only fire when power shifts by this percentage point threshold
+        private const float PowerEventThreshold = 0.5f;
+        private float _lastPowerEventPercent = -1f;
         #endregion
 
         #region Public Methods
@@ -148,6 +156,7 @@ namespace FiveNightsAtMrIngles
             isPowerOut = false;
             emergencyTimer = 0f;
             reservePower = 0f;
+            _lastPowerEventPercent = -1f;
             
             OnPowerChanged?.Invoke(100f);
             Debug.Log("Power system reset.");

@@ -34,6 +34,12 @@ namespace FiveNightsAtMrIngles
         public int currentCameraIndex = 0;
         #endregion
 
+        #region Private Fields
+        // Pre-built lookup tables for O(1) room queries (rebuilt in InitializeRooms)
+        private readonly Dictionary<string, RoomData> _roomLookup = new Dictionary<string, RoomData>();
+        private readonly Dictionary<string, int> _roomIndexLookup = new Dictionary<string, int>();
+        #endregion
+
         #region Events
         public static event Action<RoomData> OnCameraSwitch;
         public static event Action<RoomData, RoomData> OnCameraChange; // (from, to)
@@ -114,12 +120,16 @@ namespace FiveNightsAtMrIngles
         #region Room Queries
         public RoomData GetRoomByName(string roomName)
         {
-            return allRooms.Find(r => r.roomName == roomName);
+            if (_roomLookup.TryGetValue(roomName, out RoomData room))
+                return room;
+            return null;
         }
 
         public int GetRoomIndex(string roomName)
         {
-            return allRooms.FindIndex(r => r.roomName == roomName);
+            if (_roomIndexLookup.TryGetValue(roomName, out int index))
+                return index;
+            return -1;
         }
 
         public List<string> GetAllRoomNames()
@@ -142,17 +152,29 @@ namespace FiveNightsAtMrIngles
                 Debug.LogWarning("No rooms assigned to CameraSystem!");
                 return;
             }
-            
-            // Find starting room (usually Stage or first room)
-            int startIndex = allRooms.FindIndex(r => r.isStartingRoom);
-            if (startIndex >= 0)
+
+            // Build O(1) lookup tables
+            _roomLookup.Clear();
+            _roomIndexLookup.Clear();
+            int startIndex = 0;
+            bool foundStart = false;
+            for (int i = 0; i < allRooms.Count; i++)
             {
-                currentCameraIndex = startIndex;
+                if (allRooms[i] == null) continue;
+                string name = allRooms[i].roomName;
+                if (!_roomLookup.ContainsKey(name))
+                {
+                    _roomLookup[name] = allRooms[i];
+                    _roomIndexLookup[name] = i;
+                }
+                if (allRooms[i].isStartingRoom && !foundStart)
+                {
+                    startIndex = i;
+                    foundStart = true;
+                }
             }
-            else
-            {
-                currentCameraIndex = 0;
-            }
+
+            currentCameraIndex = startIndex;
             
             Debug.Log($"Camera system initialized with {allRooms.Count} rooms. Starting at: {GetCurrentRoomName()}");
         }

@@ -49,6 +49,9 @@ namespace FiveNightsAtMrIngles.Effects
         private ColorGrading colorGrading;
 #endif
         private float vhsTimer = 0f;
+        // Track the last night-progress value at which we updated post-processing
+        private float _lastNightProgress = -1f;
+        private const float NightProgressUpdateThreshold = 0.01f; // 1 % of night
         #endregion
 
         #region Unity Lifecycle
@@ -158,11 +161,16 @@ namespace FiveNightsAtMrIngles.Effects
             if (GameManager.Instance != null && GameManager.Instance.currentState == GameManager.GameState.Playing)
             {
                 float nightProgress = GameManager.Instance.GetNightProgress();
-                float horrorMultiplier = nightProgress * 0.5f;
-
-                SetVignette(vignetteIntensity + horrorMultiplier * 0.3f);
-                SetChromaticAberration(chromaticAberrationIntensity + horrorMultiplier * 0.2f);
-                SetColorGrading(-20f * nightProgress, -10f * nightProgress);
+                // Only push new values to the post-processing stack when night progress has
+                // changed meaningfully – post-processing writes are not free.
+                if (Mathf.Abs(nightProgress - _lastNightProgress) >= NightProgressUpdateThreshold)
+                {
+                    _lastNightProgress = nightProgress;
+                    float horrorMultiplier = nightProgress * 0.5f;
+                    SetVignette(vignetteIntensity + horrorMultiplier * 0.3f);
+                    SetChromaticAberration(chromaticAberrationIntensity + horrorMultiplier * 0.2f);
+                    SetColorGrading(-20f * nightProgress, -10f * nightProgress);
+                }
             }
 
             scanLineOffset += scanLineSpeed * Time.deltaTime;
@@ -216,6 +224,7 @@ namespace FiveNightsAtMrIngles.Effects
                     break;
 
                 case GameManager.GameState.Playing:
+                    _lastNightProgress = -1f; // Force a full refresh on next Update
                     ApplyDefaultEffects();
                     break;
 

@@ -79,6 +79,7 @@ import time
 import random
 import pygame
 import webbrowser
+from collections import deque
 
 # =====================================================
 # CONSTANTS
@@ -991,6 +992,11 @@ class Game:
         
         # Calculate scale factor for clean upscaling
         self.scale_factor = min(self.native_width / WINDOW_WIDTH, self.native_height / WINDOW_HEIGHT)
+        # Pre-allocate the scaled display buffer once so scale_and_blit_to_screen() can
+        # reuse it every frame instead of allocating a new Surface on every call.
+        _sw = int(WINDOW_WIDTH * self.scale_factor)
+        _sh = int(WINDOW_HEIGHT * self.scale_factor)
+        self._scaled_display_buf = pygame.Surface((_sw, _sh))
 
         # Game components
         self.game_state = GameState()
@@ -1029,7 +1035,7 @@ class Game:
         self.rng = random.Random(self.run_seed)
         
         # FPS optimization tracking
-        self.fps_samples = [60] * 10  # Track last 10 fps readings
+        self.fps_samples = deque([60.0] * 10, maxlen=10)  # Ring buffer, no slicing needed
         self.current_fps = 60
         self.quality_scale = 1.0  # Dynamic quality (1.0 = full, 0.5 = half)
         self.frame_count = 0
@@ -1194,6 +1200,9 @@ class Game:
         self._minimap_dot_orange = None
         self._overlay_surfaces = {}
         self._last_scaled_size = None  # Track window size for scale caching
+        # Pre-allocate fade overlay surface to avoid per-frame construction in draw_fade_overlay()
+        self._fade_surface = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT))
+        self._fade_surface.fill((0, 0, 0))
         
         # Load everything
         print(f"📁 BASE_DIR: {BASE_DIR}")
@@ -1270,10 +1279,8 @@ class Game:
     def draw_fade_overlay(self):
         """Draw fade overlay (call at the end of draw)"""
         if self.fade_alpha > 0:
-            fade_surf = pygame.Surface((self.game_state.width, self.game_state.height))
-            fade_surf.fill((0, 0, 0))
-            fade_surf.set_alpha(self.fade_alpha)
-            self.screen.blit(fade_surf, (0, 0))
+            self._fade_surface.set_alpha(self.fade_alpha)
+            self.screen.blit(self._fade_surface, (0, 0))
     
     def scale_mouse_pos(self, pos):
         """Scale mouse position from window coordinates to game coordinates"""
@@ -1297,20 +1304,17 @@ class Game:
         if self.scale_factor <= 0:
             return
         
-        # Calculate scaled dimensions maintaining aspect ratio
-        scaled_width = WINDOW_WIDTH * self.scale_factor
-        scaled_height = WINDOW_HEIGHT * self.scale_factor
-        
-        # Use smoothscale for high-quality upscaling
-        scaled_surface = pygame.transform.smoothscale(self.screen, (int(scaled_width), int(scaled_height)))
+        # Reuse the pre-allocated buffer – avoids a Surface allocation every frame.
+        # smoothscale accepts an optional DestSurface argument (pygame 2.x).
+        pygame.transform.smoothscale(self.screen, self._scaled_display_buf.get_size(), self._scaled_display_buf)
         
         # Center on display if needed
-        scaled_rect = scaled_surface.get_rect()
+        scaled_rect = self._scaled_display_buf.get_rect()
         scaled_rect.center = (self.native_width // 2, self.native_height // 2)
         
         # Clear display and blit scaled surface
         self.display_surface.fill((0, 0, 0))
-        self.display_surface.blit(scaled_surface, scaled_rect)
+        self.display_surface.blit(self._scaled_display_buf, scaled_rect)
     
     def set_status(self, msg=""):
         """Set status message"""
@@ -1892,7 +1896,6 @@ class Game:
                 self.color_overlay = None
         
         # Update particles (optimized - batch processing)
-        particles_to_remove = []
         for i, particle in enumerate(self.particles):
             # Skip some particle updates for performance
             if i % PARTICLE_UPDATE_SKIP == 0 or particle['life'] < 0.2:
@@ -1900,12 +1903,9 @@ class Game:
                 particle['y'] += particle['vy'] * self.quality_scale
                 particle['vy'] += 0.2  # Gravity
             particle['life'] -= dt
-            if particle['life'] <= 0:
-                particles_to_remove.append(particle)
         
-        # Remove dead particles in batch
-        for particle in particles_to_remove:
-            self.particles.remove(particle)
+        # Remove dead particles in a single pass (O(n) vs the previous O(n²) remove loop)
+        self.particles = [p for p in self.particles if p['life'] > 0]
         
         # Update visual effects based on game state
         self.game_state.scan_line_offset = (self.game_state.scan_line_offset + dt * 30) % self.game_state.height
@@ -1959,28 +1959,39 @@ class Game:
                     
                     # Use cached glow surface if available
                     if cache_key not in self._cached_glow_surfaces:
-                        glow_surface = pygame.Surface((glow_size * 2, glow_size * 2), pygame.SRCALPHA)
-                        pygame.draw.circle(glow_surface, (*color, 85), (glow_size, glow_size), glow_size)
+                        # Regular surface + colorkey avoids per-frame .copy() calls.
+                        # The black background is masked out; the circle pixels are blitted
+                        # with per-surface alpha set just before each blit.
+                        glow_surface = pygame.Surface((glow_size * 2, glow_size * 2))
+                        glow_surface.fill((0, 0, 0))
+                        pygame.draw.circle(glow_surface, color, (glow_size, glow_size), glow_size)
+                        glow_surface.set_colorkey((0, 0, 0))
                         self._cached_glow_surfaces[cache_key] = glow_surface
                         # Limit cache size
                         if len(self._cached_glow_surfaces) > MAX_PARTICLE_CACHE_SIZE:
                             self._cached_glow_surfaces.pop(next(iter(self._cached_glow_surfaces)))
                     
-                    glow_surface = self._cached_glow_surfaces[cache_key].copy()
+                    # No .copy() needed – set_alpha() on the cached surface is applied at
+                    # blit time and does not permanently modify the surface's pixel data.
+                    glow_surface = self._cached_glow_surfaces[cache_key]
                     glow_surface.set_alpha(alpha // 3)
                     self.screen.blit(glow_surface, (pos[0] - glow_size, pos[1] - glow_size))
                 
                 # Main particle (optimized with caching)
                 cache_key = (size, color)
                 if cache_key not in self._cached_surfaces:
-                    particle_surface = pygame.Surface((size * 2, size * 2), pygame.SRCALPHA)
-                    pygame.draw.circle(particle_surface, (*color, 255), (size, size), size)
+                    # Regular surface + colorkey: no per-frame copy required.
+                    particle_surface = pygame.Surface((size * 2, size * 2))
+                    particle_surface.fill((0, 0, 0))
+                    pygame.draw.circle(particle_surface, color, (size, size), size)
+                    particle_surface.set_colorkey((0, 0, 0))
                     self._cached_surfaces[cache_key] = particle_surface
                     # Limit cache size
                     if len(self._cached_surfaces) > MAX_PARTICLE_CACHE_SIZE:
                         self._cached_surfaces.pop(next(iter(self._cached_surfaces)))
                 
-                particle_surface = self._cached_surfaces[cache_key].copy()
+                # Reuse cached surface directly – no .copy() needed.
+                particle_surface = self._cached_surfaces[cache_key]
                 particle_surface.set_alpha(alpha)
                 self.screen.blit(particle_surface, (pos[0] - size, pos[1] - size))
             except Exception as e:
@@ -5055,8 +5066,7 @@ class Game:
                 self.frame_count += 1
                 if self.frame_count % 10 == 0:  # Update FPS tracking every 10 frames
                     self.current_fps = self.clock.get_fps()
-                    self.fps_samples.append(self.current_fps)
-                    self.fps_samples = self.fps_samples[-10:]  # Keep last 10 samples
+                    self.fps_samples.append(self.current_fps)  # deque(maxlen=10) auto-evicts oldest
                     avg_fps = sum(self.fps_samples) / len(self.fps_samples)
                     
                     # Dynamic quality adjustment to maintain 60 FPS

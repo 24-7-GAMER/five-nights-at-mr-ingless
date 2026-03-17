@@ -94,7 +94,17 @@ namespace FiveNightsAtMrIngles
         #region Initialization
         void Initialize()
         {
-            Application.targetFrameRate = targetFPS;
+            if (fpsCapEnabled)
+            {
+                // Disable VSync so Application.targetFrameRate is actually honoured
+                QualitySettings.vSyncCount = 0;
+                Application.targetFrameRate = targetFPS;
+            }
+            else
+            {
+                QualitySettings.vSyncCount = 1;
+                Application.targetFrameRate = -1;
+            }
             gameStartTime = Time.time;
             
             // Subscribe to events
